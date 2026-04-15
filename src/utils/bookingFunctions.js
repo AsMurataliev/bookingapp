@@ -1,13 +1,24 @@
-// src/utils/bookingFunctions.js
-import {db} from '../firebase';
-import {collection, doc, getDoc, getDocs, query, updateDoc, where} from 'firebase/firestore';
+﻿import {db} from '../firebase';
+import {
+    doc,
+    updateDoc,
+    collection,
+    getDoc,
+    getDocs,
+    query,
+    where,
+    orderBy,
+    serverTimestamp,
+    Timestamp
+} from 'firebase/firestore';
 
 export const updateBooking = async (bookingId, updatedData) => {
     try {
         const bookingRef = doc(db, 'bookings', bookingId);
         await updateDoc(bookingRef, {
             ...updatedData,
-            lastModified: new Date()
+            lastModified: Timestamp.now(),
+            updatedAt: Timestamp.now()
         });
         return true;
     } catch (error) {
@@ -16,25 +27,29 @@ export const updateBooking = async (bookingId, updatedData) => {
     }
 };
 
-export const getAvailableTimeSlots = async (shopId, date) => {
+export const getAvailableTimeSlots = async (shopId, date, employeeId = null) => {
     try {
-        // First check if shopId exists
         if (!shopId) {
-            throw new Error('Shop ID is required');
+            return [
+                "09:00", "09:30", "10:00", "10:30", "11:00", "11:30",
+                "12:00", "12:30", "13:00", "13:30", "14:00", "14:30",
+                "15:00", "15:30", "16:00", "16:30", "17:00", "17:30"
+            ];
         }
 
-        // Get shop document
         const shopDoc = await getDoc(doc(db, 'barberShops', shopId));
 
         if (!shopDoc.exists()) {
-            throw new Error('Shop not found');
+            return [
+                "09:00", "09:30", "10:00", "10:30", "11:00", "11:30",
+                "12:00", "12:30", "13:00", "13:30", "14:00", "14:30",
+                "15:00", "15:30", "16:00", "16:30", "17:00", "17:30"
+            ];
         }
 
         const shopData = shopDoc.data();
 
-        // Check if availability exists
         if (!shopData.availability) {
-            // Return default time slots if no availability is set
             return [
                 "09:00", "09:30", "10:00", "10:30", "11:00", "11:30",
                 "12:00", "12:30", "13:00", "13:30", "14:00", "14:30",
@@ -42,11 +57,11 @@ export const getAvailableTimeSlots = async (shopId, date) => {
             ];
         }
 
-        const dayOfWeek = date.toLocaleDateString('en-US', {weekday: 'long'});
+        const dateObj = date instanceof Date ? date : new Date(date);
+        const dayOfWeek = dateObj.toLocaleDateString('en-US', {weekday: 'long'});
         const workingHours = shopData.availability[dayOfWeek];
 
         if (!workingHours || !workingHours.open || !workingHours.close) {
-            // Return default time slots if no specific hours are set
             return [
                 "09:00", "09:30", "10:00", "10:30", "11:00", "11:30",
                 "12:00", "12:30", "13:00", "13:30", "14:00", "14:30",
@@ -54,37 +69,168 @@ export const getAvailableTimeSlots = async (shopId, date) => {
             ];
         }
 
-        // Generate slots based on working hours
         const slots = [];
-        let [startHour] = workingHours.open.split(':');
-        let [endHour] = workingHours.close.split(':');
+        const [startHour, startMinute] = workingHours.open.split(':').map(Number);
+        const [endHour, endMinute] = workingHours.close.split(':').map(Number);
 
-        for (let hour = parseInt(startHour); hour < parseInt(endHour); hour++) {
-            slots.push(`${hour.toString().padStart(2, '0')}:00`);
-            slots.push(`${hour.toString().padStart(2, '0')}:30`);
+        let currentMinutes = startHour * 60 + startMinute;
+        const endMinutes = endHour * 60 + endMinute;
+
+        while (currentMinutes < endMinutes) {
+            const hour = Math.floor(currentMinutes / 60);
+            const minute = currentMinutes % 60;
+            slots.push(`${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`);
+            currentMinutes += 30;
         }
 
-        // Get existing bookings for that date
+        const dateStr = typeof date === 'string' ? date : date.toISOString().split('T')[0];
+
         const bookingsRef = collection(db, 'bookings');
-        const q = query(
+        let bookingsQuery = query(
             bookingsRef,
             where('shopId', '==', shopId),
-            where('selectedDate', '==', date.toISOString().split('T')[0]),
-            where('status', 'in', ['confirmed', 'pending'])
+            where('selectedDate', '==', dateStr),
+            where('status', 'in', ['pending', 'confirmed'])
         );
 
-        const bookings = await getDocs(q);
-        const bookedSlots = bookings.docs.map(doc => doc.data().selectedTime);
+        const bookings = await getDocs(bookingsQuery);
+        const bookedTimes = new Set();
 
-        // Filter out booked slots
-        return slots.filter(slot => !bookedSlots.includes(slot));
+        bookings.docs.forEach(doc => {
+            const bookingData = doc.data();
+            if (!employeeId || bookingData.employeeId === employeeId) {
+                bookedTimes.add(bookingData.selectedTime || bookingData.time);
+            }
+        });
+
+        const bookedTimeSlotsRef = collection(db, 'bookedTimeSlots');
+        let timeSlotsQuery = query(
+            bookedTimeSlotsRef,
+            where('shopId', '==', shopId),
+            where('date', '==', dateStr),
+            where('status', 'in', ['booked', 'pending'])
+        );
+
+        if (employeeId) {
+            timeSlotsQuery = query(
+                bookedTimeSlotsRef,
+                where('shopId', '==', shopId),
+                where('date', '==', dateStr),
+                where('employeeId', '==', employeeId),
+                where('status', 'in', ['booked', 'pending'])
+            );
+        }
+
+        const timeSlots = await getDocs(timeSlotsQuery);
+        timeSlots.docs.forEach(doc => {
+            bookedTimes.add(doc.data().time);
+        });
+
+        return slots.filter(slot => !bookedTimes.has(slot));
     } catch (error) {
         console.error('Error getting available slots:', error);
-        // Return default time slots on error
         return [
             "09:00", "09:30", "10:00", "10:30", "11:00", "11:30",
             "12:00", "12:30", "13:00", "13:30", "14:00", "14:30",
             "15:00", "15:30", "16:00", "16:30", "17:00", "17:30"
         ];
     }
+};
+
+export const fetchBookings = async (shopId) => {
+    try {
+        const bookingsRef = collection(db, 'bookings');
+        const q = query(
+            bookingsRef,
+            where('shopId', '==', shopId),
+            orderBy('selectedDate', 'desc'),
+            orderBy('selectedTime', 'desc')
+        );
+
+        const querySnapshot = await getDocs(q);
+        return querySnapshot.docs.map(doc => {
+            const data = doc.data();
+            return {
+                id: doc.id,
+                ...data,
+                selectedDate: data.selectedDate || data.date,
+                selectedTime: data.selectedTime || data.time,
+                createdAt: data.createdAt?.toDate?.() || new Date()
+            };
+        });
+    } catch (error) {
+        console.error('Error fetching bookings:', error);
+        throw error;
+    }
+};
+
+export const cancelBooking = async (bookingId, reason, cancelledBy = 'customer') => {
+    try {
+        const bookingRef = doc(db, 'bookings', bookingId);
+        const bookingSnap = await getDoc(bookingRef);
+
+        if (!bookingSnap.exists()) {
+            throw new Error('Booking not found');
+        }
+
+        const bookingData = bookingSnap.data();
+
+        await updateDoc(bookingRef, {
+            status: 'cancelled',
+            cancellationReason: reason,
+            cancelledBy,
+            cancelledAt: serverTimestamp(),
+            updatedAt: serverTimestamp()
+        });
+
+        if (bookingData.timeSlotId) {
+            const slotRef = doc(db, 'bookedTimeSlots', bookingData.timeSlotId);
+            await updateDoc(slotRef, { status: 'cancelled' });
+        }
+
+        return true;
+    } catch (error) {
+        console.error('Error cancelling booking:', error);
+        throw error;
+    }
+};
+
+export const confirmBooking = async (bookingId, message = '') => {
+    try {
+        const bookingRef = doc(db, 'bookings', bookingId);
+        await updateDoc(bookingRef, {
+            status: 'confirmed',
+            confirmedAt: serverTimestamp(),
+            updatedAt: serverTimestamp()
+        });
+        return true;
+    } catch (error) {
+        console.error('Error confirming booking:', error);
+        throw error;
+    }
+};
+
+export const completeBooking = async (bookingId, notes = '') => {
+    try {
+        const bookingRef = doc(db, 'bookings', bookingId);
+        await updateDoc(bookingRef, {
+            status: 'completed',
+            completedAt: serverTimestamp(),
+            completionNotes: notes,
+            updatedAt: serverTimestamp()
+        });
+        return true;
+    } catch (error) {
+        console.error('Error completing booking:', error);
+        throw error;
+    }
+};
+
+export default {
+    updateBooking,
+    getAvailableTimeSlots,
+    fetchBookings,
+    cancelBooking,
+    confirmBooking,
+    completeBooking
 };

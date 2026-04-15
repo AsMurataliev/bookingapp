@@ -1,30 +1,14 @@
-const functions = require('firebase-functions');
+﻿const functions = require('firebase-functions');
 const admin = require('firebase-admin');
-const nodemailer = require('nodemailer');
 const { shopNameTriggers } = require('./triggers');
 
 admin.initializeApp();
-
-const formData = require('form-data');
-const Mailgun = require('mailgun.js');
-const mailgun = new Mailgun(formData);
-
-// Use Firebase Functions config for secrets
-// Set with: firebase functions:config:set mailgun.key="xxx" mailgun.domain="xxx"
-const mailgunConfig = functions.config().mailgun || {};
-const mg = mailgun.client({
-    username: 'api',
-    key: mailgunConfig.key || process.env.MAILGUN_API_KEY,
-    url: 'https://api.eu.mailgun.net'
-});
-
-const DOMAIN = mailgunConfig.domain || process.env.MAILGUN_DOMAIN || 'barbersbuddies.com';
 
 // CORS configuration - only allow trusted origins
 const ALLOWED_ORIGINS = [
     'https://barbersbuddies.com',
     'https://www.barbersbuddies.com',
-    'http://localhost:3000'  // For development
+    'http://localhost:3000'
 ];
 
 const setCorsHeaders = (req, res) => {
@@ -36,10 +20,37 @@ const setCorsHeaders = (req, res) => {
     res.set('Access-Control-Allow-Headers', 'Content-Type');
 };
 
-exports.createBooking = functions.https.onRequest(async (req, res) => {
-    console.log('Function started');
+// =============================================================================
+// EMAIL SENDING DISABLED - Using console.log and Firestore logging instead
+// To re-enable, configure Mailgun in functions config:
+// firebase functions:config:set mailgun.key="xxx" mailgun.domain="xxx"
+// =============================================================================
 
-    // Enable CORS
+const logEmail = (type, to, data) => {
+    console.log('========================================');
+    console.log(`[EMAIL DISABLED] ${type}`);
+    console.log(`[EMAIL DISABLED] To: ${to}`);
+    console.log(`[EMAIL DISABLED] Subject: ${data.subject || 'N/A'}`);
+    console.log(`[EMAIL DISABLED] Booking ID: ${data.bookingId || 'N/A'}`);
+    console.log('========================================');
+    return admin.firestore().collection('emailLogs').add({
+        type,
+        to,
+        subject: data.subject || 'N/A',
+        bookingId: data.bookingId || null,
+        customerName: data.userName || 'N/A',
+        shopName: data.shopName || 'N/A',
+        appointmentDate: data.selectedDate || data.newDate || 'N/A',
+        appointmentTime: data.selectedTime || data.newTime || 'N/A',
+        status: 'disabled',
+        reason: 'Email sending disabled - using console.log instead',
+        createdAt: admin.firestore.FieldValue.serverTimestamp()
+    }).catch(err => console.log('Failed to log email:', err));
+};
+
+exports.createBooking = functions.https.onRequest(async (req, res) => {
+    console.log('[createBooking] Function started');
+
     setCorsHeaders(req, res);
 
     if (req.method === 'OPTIONS') {
@@ -48,12 +59,9 @@ exports.createBooking = functions.https.onRequest(async (req, res) => {
     }
 
     if (req.method !== 'POST') {
-        console.log('Method not allowed:', req.method);
         res.status(405).json({error: 'Method Not Allowed'});
         return;
     }
-
-    console.log('Request body:', JSON.stringify(req.body));
 
     const {
         shopId,
@@ -67,25 +75,16 @@ exports.createBooking = functions.https.onRequest(async (req, res) => {
         selectedTime
     } = req.body;
 
-    // Validate input
     if (!shopId || !shopEmail || !userName || !userEmail || !selectedDate || !selectedServices || selectedServices.length === 0 || !selectedTime) {
-        console.log('Missing required fields');
+        console.log('[createBooking] Missing required fields');
         res.status(400).json({error: 'Missing required fields'});
         return;
     }
 
-    // Additional check for email addresses
-    if (!isValidEmail(shopEmail) || !isValidEmail(userEmail)) {
-        console.log('Invalid email address');
-        res.status(400).json({error: 'Invalid email address'});
-        return;
-    }
-
     try {
-        console.log('Saving booking to Firestore');
-        // 1. Save booking to Firestore
         const bookingRef = await admin.firestore().collection('bookings').add({
             shopId,
+            shopOwnerId: req.body.shopOwnerId || null,
             shopEmail,
             userName,
             userEmail,
@@ -94,26 +93,41 @@ exports.createBooking = functions.https.onRequest(async (req, res) => {
             selectedServices,
             customService,
             selectedTime,
+            status: 'pending',
             createdAt: admin.firestore.FieldValue.serverTimestamp()
         });
 
         const bookingId = bookingRef.id;
-        console.log('Booking saved with ID:', bookingId);
+        console.log(`[createBooking] Booking saved with ID: ${bookingId}`);
 
-        console.log('Sending email to shop');
-        // 2. Send email to shop
-        await sendEmailToShop(shopEmail, {bookingId, ...req.body});
-        console.log('Email sent to shop');
+        // Log email notifications (disabled)
+        const servicesList = selectedServices.map(s => `${s.name} (тВм${s.price})`).join(', ');
+        const totalPrice = selectedServices.reduce((sum, s) => sum + parseFloat(s.price), 0).toFixed(2);
 
-        console.log('Sending email to user');
-        // 3. Send confirmation email to user
-        await sendEmailToUser(userEmail, {bookingId, ...req.body});
-        console.log('Email sent to user');
+        await logEmail('booking_created_shop', shopEmail, {
+            subject: `New Booking - ID: ${bookingId}`,
+            bookingId,
+            userName,
+            selectedDate,
+            selectedTime,
+            services: servicesList,
+            totalPrice
+        });
 
-        console.log('Booking process completed successfully');
+        await logEmail('booking_created_customer', userEmail, {
+            subject: 'Booking Confirmation',
+            bookingId,
+            userName,
+            selectedDate,
+            selectedTime,
+            services: servicesList,
+            totalPrice
+        });
+
+        console.log('[createBooking] Booking process completed successfully');
         res.status(200).json({message: 'Booking created successfully', bookingId});
     } catch (error) {
-        console.error('Error creating booking:', error);
+        console.error('[createBooking] Error:', error);
         res.status(500).json({error: 'Error creating booking', details: error.message});
     }
 });
@@ -122,96 +136,7 @@ exports.onShopCreate = require('./triggers').onShopCreate;
 exports.onShopDelete = require('./triggers').onShopDelete;
 exports.onShopUpdate = require('./triggers').onShopUpdate;
 
-async function sendEmailToShop(shopEmail, bookingData) {
-    console.log('Preparing email for shop');
-    if (!isValidEmail(shopEmail)) {
-        console.error('Invalid shop email:', shopEmail);
-        throw new Error('Invalid shop email address');
-    }
-
-    const {
-        bookingId,
-        userName,
-        userEmail,
-        userPhone,
-        selectedDate,
-        selectedServices,
-        customService,
-        selectedTime
-    } = bookingData;
-
-    const servicesHtml = selectedServices.map(service => `<li>${service.name} - €${service.price}</li>`).join('');
-    const totalPrice = selectedServices.reduce((sum, service) => sum + parseFloat(service.price), 0).toFixed(2);
-
-    try {
-        await mg.messages.create(DOMAIN, {
-            from: "BarbersBuddies <bookings@barbersbuddies.com>",
-            to: shopEmail,
-            subject: `New Booking - ID: ${bookingId}`,
-            html: `
-        <h1>New Booking</h1>
-        <p>Booking ID: ${bookingId}</p>
-        <p>Customer: ${userName}</p>
-        <p>Email: ${userEmail}</p>
-        <p>Phone: ${userPhone || 'Not provided'}</p>
-        <p>Date: ${selectedDate}</p>
-        <p>Time: ${selectedTime}</p>
-        <h2>Services:</h2>
-        <ul>${servicesHtml}</ul>
-        ${customService ? `<p>Custom Service: ${customService}</p>` : ''}
-        <p><strong>Total: €${totalPrice}</strong></p>
-      `
-        });
-        console.log('Email sent to shop successfully');
-    } catch (error) {
-        console.error('Error sending email to shop:', error);
-        throw error;
-    }
-}
-
-async function sendEmailToUser(userEmail, bookingData) {
-    console.log('Preparing email for user');
-    if (!isValidEmail(userEmail)) {
-        console.error('Invalid user email:', userEmail);
-        throw new Error('Invalid user email address');
-    }
-
-    const {bookingId, userName, selectedDate, selectedServices, customService, selectedTime} = bookingData;
-
-    const servicesHtml = selectedServices.map(service => `<li>${service.name} - €${service.price}</li>`).join('');
-    const totalPrice = selectedServices.reduce((sum, service) => sum + parseFloat(service.price), 0).toFixed(2);
-
-    try {
-        await mg.messages.create(DOMAIN, {
-            from: "BarbersBuddies <bookings@barbersbuddies.com>",
-            to: userEmail,
-            subject: 'Booking Confirmation',
-            html: `
-        <h1>Your Booking is Confirmed</h1>
-        <p>Dear ${userName},</p>
-        <p>Your booking (ID: ${bookingId}) has been confirmed for ${selectedDate} at ${selectedTime}.</p>
-        <h2>Services:</h2>
-        <ul>${servicesHtml}</ul>
-        ${customService ? `<p>Custom Service: ${customService}</p>` : ''}
-        <p><strong>Total: €${totalPrice}</strong></p>
-        <p>If you need to make any changes, please contact us with your booking ID.</p>
-      `
-        });
-        console.log('Email sent to user successfully');
-    } catch (error) {
-        console.error('Error sending email to user:', error);
-        throw error;
-    }
-}
-
-function isValidEmail(email) {
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    return emailRegex.test(email);
-}
-
-// Function to handle appointment updates
 exports.updateBooking = functions.https.onRequest(async (req, res) => {
-    // Enable CORS
     setCorsHeaders(req, res);
 
     if (req.method === 'OPTIONS') {
@@ -224,17 +149,9 @@ exports.updateBooking = functions.https.onRequest(async (req, res) => {
         return;
     }
 
-    const {
-        bookingId,
-        date,
-        time,
-        services,
-        notes,
-        totalPrice
-    } = req.body;
+    const { bookingId, selectedDate, selectedTime, selectedServices, notes, totalPrice } = req.body;
 
     try {
-        // Get the existing booking
         const bookingRef = admin.firestore().collection('bookings').doc(bookingId);
         const bookingDoc = await bookingRef.get();
 
@@ -245,43 +162,40 @@ exports.updateBooking = functions.https.onRequest(async (req, res) => {
 
         const bookingData = bookingDoc.data();
 
-        // Update the booking
         await bookingRef.update({
-            selectedDate: date,
-            selectedTime: time,
-            selectedServices: services,
+            selectedDate,
+            selectedTime,
+            selectedServices,
             notes,
             totalPrice,
-            lastModified: admin.firestore.FieldValue.serverTimestamp()
+            updatedAt: admin.firestore.FieldValue.serverTimestamp()
         });
 
-        // Send update emails
-        await sendUpdateEmailToUser(bookingData.userEmail, {
-            ...bookingData,
-            selectedDate: date,
-            selectedTime: time,
-            selectedServices: services,
+        await logEmail('booking_updated_customer', bookingData.userEmail, {
+            subject: 'Your Appointment Has Been Updated',
+            bookingId,
+            userName: bookingData.userName,
+            selectedDate,
+            selectedTime,
             totalPrice
         });
 
-        await sendUpdateEmailToShop(bookingData.shopEmail, {
-            ...bookingData,
-            selectedDate: date,
-            selectedTime: time,
-            selectedServices: services,
-            totalPrice
+        await logEmail('booking_updated_shop', bookingData.shopEmail, {
+            subject: `Booking Updated - ID: ${bookingId}`,
+            bookingId,
+            userName: bookingData.userName,
+            selectedDate,
+            selectedTime
         });
 
         res.status(200).json({message: 'Booking updated successfully'});
     } catch (error) {
-        console.error('Error updating booking:', error);
+        console.error('[updateBooking] Error:', error);
         res.status(500).json({error: 'Error updating booking'});
     }
 });
 
-// Function to handle appointment cancellations
 exports.cancelBooking = functions.https.onRequest(async (req, res) => {
-    // Enable CORS
     setCorsHeaders(req, res);
 
     if (req.method === 'OPTIONS') {
@@ -289,7 +203,7 @@ exports.cancelBooking = functions.https.onRequest(async (req, res) => {
         return;
     }
 
-    const {bookingId, reason} = req.body;
+    const { bookingId, reason } = req.body;
 
     try {
         const bookingRef = admin.firestore().collection('bookings').doc(bookingId);
@@ -302,139 +216,48 @@ exports.cancelBooking = functions.https.onRequest(async (req, res) => {
 
         const bookingData = bookingDoc.data();
 
-        // Update booking status
         await bookingRef.update({
             status: 'cancelled',
             cancellationReason: reason,
             cancelledAt: admin.firestore.FieldValue.serverTimestamp()
         });
 
-        // Send cancellation emails
-        await sendCancellationEmailToUser(bookingData.userEmail, {
-            ...bookingData,
-            reason
+        await logEmail('booking_cancelled_customer', bookingData.userEmail, {
+            subject: 'Your Appointment Has Been Cancelled',
+            bookingId,
+            userName: bookingData.userName,
+            selectedDate: bookingData.selectedDate,
+            selectedTime: bookingData.selectedTime
         });
 
-        await sendCancellationEmailToShop(bookingData.shopEmail, {
-            ...bookingData,
-            reason
+        await logEmail('booking_cancelled_shop', bookingData.shopEmail, {
+            subject: `Booking Cancelled - ID: ${bookingId}`,
+            bookingId,
+            userName: bookingData.userName,
+            selectedDate: bookingData.selectedDate,
+            selectedTime: bookingData.selectedTime
         });
 
         res.status(200).json({message: 'Booking cancelled successfully'});
     } catch (error) {
-        console.error('Error cancelling booking:', error);
+        console.error('[cancelBooking] Error:', error);
         res.status(500).json({error: 'Error cancelling booking'});
     }
 });
-
-// Helper functions for sending emails
-async function sendUpdateEmailToUser(userEmail, bookingData) {
-    const servicesHtml = bookingData.selectedServices
-        .map(service => `<li>${service.name} - €${service.price}</li>`)
-        .join('');
-
-    await mg.messages.create(DOMAIN, {
-        from: "BarbersBuddies <bookings@barbersbuddies.com>",
-        to: userEmail,
-        subject: 'Your Appointment Has Been Updated',
-        html: `
-            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-                <h1>Appointment Update</h1>
-                <p>Dear ${bookingData.userName},</p>
-                <p>Your appointment has been updated with the following details:</p>
-                <h2>New Appointment Details:</h2>
-                <p>Date: ${bookingData.selectedDate}</p>
-                <p>Time: ${bookingData.selectedTime}</p>
-                <h3>Services:</h3>
-                <ul>${servicesHtml}</ul>
-                <p><strong>Total: €${bookingData.totalPrice}</strong></p>
-                <p>If you have any questions, please contact us.</p>
-            </div>
-        `
-    });
-}
-
-async function sendUpdateEmailToShop(shopEmail, bookingData) {
-    const servicesHtml = bookingData.selectedServices
-        .map(service => `<li>${service.name} - €${service.price}</li>`)
-        .join('');
-
-    await mg.messages.create(DOMAIN, {
-        from: "BarbersBuddies <bookings@barbersbuddies.com>",
-        to: shopEmail,
-        subject: `Booking Updated - ID: ${bookingData.bookingId}`,
-        html: `
-            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-                <h1>Booking Update</h1>
-                <p>Booking ID: ${bookingData.bookingId}</p>
-                <p>Customer: ${bookingData.userName}</p>
-                <p>Email: ${bookingData.userEmail}</p>
-                <p>Phone: ${bookingData.userPhone || 'Not provided'}</p>
-                <h2>Updated Details:</h2>
-                <p>Date: ${bookingData.selectedDate}</p>
-                <p>Time: ${bookingData.selectedTime}</p>
-                <h3>Services:</h3>
-                <ul>${servicesHtml}</ul>
-                <p><strong>Total: €${bookingData.totalPrice}</strong></p>
-            </div>
-        `
-    });
-}
-
-async function sendCancellationEmailToUser(userEmail, bookingData) {
-    await mg.messages.create(DOMAIN, {
-        from: "BarbersBuddies <bookings@barbersbuddies.com>",
-        to: userEmail,
-        subject: 'Your Appointment Has Been Cancelled',
-        html: `
-            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-                <h1>Appointment Cancellation</h1>
-                <p>Dear ${bookingData.userName},</p>
-                <p>Your appointment has been cancelled.</p>
-                <p><strong>Reason:</strong> ${bookingData.reason}</p>
-                <h2>Cancelled Appointment Details:</h2>
-                <p>Date: ${bookingData.selectedDate}</p>
-                <p>Time: ${bookingData.selectedTime}</p>
-                <p>We apologize for any inconvenience. Feel free to book another appointment.</p>
-            </div>
-        `
-    });
-}
-
-async function sendCancellationEmailToShop(shopEmail, bookingData) {
-    await mg.messages.create(DOMAIN, {
-        from: "BarbersBuddies <bookings@barbersbuddies.com>",
-        to: shopEmail,
-        subject: `Booking Cancelled - ID: ${bookingData.bookingId}`,
-        html: `
-            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-                <h1>Booking Cancellation</h1>
-                <p>Booking ID: ${bookingData.bookingId}</p>
-                <p>Customer: ${bookingData.userName}</p>
-                <p>Email: ${bookingData.userEmail}</p>
-                <p>Reason: ${bookingData.reason}</p>
-                <h2>Cancelled Booking Details:</h2>
-                <p>Date: ${bookingData.selectedDate}</p>
-                <p>Time: ${bookingData.selectedTime}</p>
-            </div>
-        `
-    });
-}
 
 exports.onNewMessage = functions.firestore
     .document('messages/{messageId}')
     .onCreate(async (snap, context) => {
         const message = snap.data();
+        console.log(`[onNewMessage] New message in conversation ${message.bookingId}`);
 
         try {
-            // Get receiver's FCM token
             const receiverDoc = await admin.firestore()
                 .collection('users')
-                .doc(message.receiverId)
+                .doc(message.receiverId || message.shopId)
                 .get();
 
             if (receiverDoc.exists && receiverDoc.data().fcmToken) {
-                // Send push notification
                 await admin.messaging().send({
                     token: receiverDoc.data().fcmToken,
                     notification: {
@@ -446,40 +269,30 @@ exports.onNewMessage = functions.firestore
                         bookingId: message.bookingId,
                         messageId: context.params.messageId
                     }
+                }).catch(err => console.log('[FCM] Error sending push:', err));
+            }
+
+            if (receiverDoc.exists && receiverDoc.data().email) {
+                await logEmail('new_message', receiverDoc.data().email, {
+                    subject: 'New Message Regarding Your Appointment',
+                    bookingId: message.bookingId
                 });
             }
 
-            // Send email notification
-            const receiverEmail = receiverDoc.data().email;
-            await mg.messages.create(DOMAIN, {
-                from: "BarbersBuddies <noreply@barbersbuddies.com>",
-                to: receiverEmail,
-                subject: 'New Message Regarding Your Appointment',
-                html: `
-<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-    <h2>New Message</h2>
-    <p>You have a new message regarding your appointment.</p>
-    <p><strong>Message:</strong> ${message.content}</p>
-    <p>Please log in to respond.</p>
-</div>
-    `
-            });
-
             return null;
         } catch (error) {
-            console.error('Error processing new message:', error);
-            throw error;
+            console.error('[onNewMessage] Error:', error);
+            return null;
         }
     });
 
-// Ratings Collection Trigger
 exports.onNewRating = functions.firestore
     .document('ratings/{ratingId}')
     .onCreate(async (snap, context) => {
         const rating = snap.data();
+        console.log(`[onNewRating] New rating for shop ${rating.shopId}`);
 
         try {
-            // Update shop's average rating
             const shopRef = admin.firestore().collection('barberShops').doc(rating.shopId);
             const shopDoc = await shopRef.get();
 
@@ -496,7 +309,6 @@ exports.onNewRating = functions.firestore
                     totalRatings: ratings.length
                 });
 
-                // Send notification to shop owner
                 const ownerDoc = await admin.firestore()
                     .collection('users')
                     .doc(shopData.ownerId)
@@ -507,31 +319,25 @@ exports.onNewRating = functions.firestore
                         token: ownerDoc.data().fcmToken,
                         notification: {
                             title: 'New Rating Received',
-                            body: `You received a ${rating.rating}-star rating with a review`
+                            body: `You received a ${rating.rating}-star rating`
                         },
                         data: {
                             type: 'rating',
                             ratingId: context.params.ratingId,
                             shopId: rating.shopId
                         }
-                    });
+                    }).catch(err => console.log('[FCM] Error sending rating notification:', err));
                 }
             }
 
             return null;
         } catch (error) {
-            console.error('Error processing new rating:', error);
-            throw error;
+            console.error('[onNewRating] Error:', error);
+            return null;
         }
     });
 
-function sendRescheduleEmailToShop(shopEmail, param2) {
-    return undefined;
-}
-
-// Rescheduling Function
 exports.rescheduleAppointment = functions.https.onRequest(async (req, res) => {
-    // Enable CORS
     setCorsHeaders(req, res);
 
     if (req.method === 'OPTIONS') {
@@ -539,15 +345,8 @@ exports.rescheduleAppointment = functions.https.onRequest(async (req, res) => {
     }
 
     try {
-        const {
-            bookingId,
-            newDate,
-            newTime,
-            reason,
-            userId
-        } = req.body;
+        const { bookingId, newDate, newTime, reason, userId } = req.body;
 
-        // Get booking
         const bookingRef = admin.firestore().collection('bookings').doc(bookingId);
         const bookingDoc = await bookingRef.get();
 
@@ -557,17 +356,6 @@ exports.rescheduleAppointment = functions.https.onRequest(async (req, res) => {
 
         const bookingData = bookingDoc.data();
 
-        // Verify availability
-        const shopRef = admin.firestore().collection('barberShops').doc(bookingData.shopId);
-        const shopDoc = await shopRef.get();
-
-        if (!shopDoc.exists) {
-            return res.status(404).json({error: 'Shop not found'});
-        }
-
-        const shopData = shopDoc.data();
-
-        // Check if time slot is available
         const existingBookingsQuery = await admin.firestore()
             .collection('bookings')
             .where('shopId', '==', bookingData.shopId)
@@ -580,7 +368,6 @@ exports.rescheduleAppointment = functions.https.onRequest(async (req, res) => {
             return res.status(400).json({error: 'Time slot is not available'});
         }
 
-        // Update booking
         await bookingRef.update({
             selectedDate: newDate,
             selectedTime: newTime,
@@ -592,7 +379,6 @@ exports.rescheduleAppointment = functions.https.onRequest(async (req, res) => {
             status: 'rescheduled'
         });
 
-        // Create notification
         await admin.firestore().collection('notifications').add({
             userId: bookingData.userEmail,
             type: 'reschedule',
@@ -603,26 +389,29 @@ exports.rescheduleAppointment = functions.https.onRequest(async (req, res) => {
             read: false
         });
 
-        // Send emails
-        await Promise.all([
-            sendRescheduleEmailToCustomer(bookingData.userEmail, {
-                ...bookingData,
-                newDate,
-                newTime,
-                reason,
-                shopName: shopData.name
-            }),
-            sendRescheduleEmailToShop(bookingData.shopEmail, {
-                ...bookingData,
-                newDate,
-                newTime,
-                reason
-            })
-        ]);
+        await logEmail('booking_rescheduled_customer', bookingData.userEmail, {
+            subject: 'Your Appointment Has Been Rescheduled',
+            bookingId,
+            userName: bookingData.userName,
+            previousDate: bookingData.selectedDate,
+            previousTime: bookingData.selectedTime,
+            newDate,
+            newTime
+        });
+
+        await logEmail('booking_rescheduled_shop', bookingData.shopEmail, {
+            subject: `Booking Rescheduled - ID: ${bookingId}`,
+            bookingId,
+            userName: bookingData.userName,
+            previousDate: bookingData.selectedDate,
+            previousTime: bookingData.selectedTime,
+            newDate,
+            newTime
+        });
 
         return res.status(200).json({message: 'Appointment rescheduled successfully'});
     } catch (error) {
-        console.error('Error rescheduling appointment:', error);
+        console.error('[rescheduleAppointment] Error:', error);
         return res.status(500).json({error: 'Internal server error'});
     }
 });
@@ -630,206 +419,31 @@ exports.rescheduleAppointment = functions.https.onRequest(async (req, res) => {
 exports.sendAppointmentNotifications = functions.pubsub
     .schedule('every 1 hours')
     .onRun(async (context) => {
-        try {
-            const now = new Date();
-            const db = admin.firestore();
-
-            // Get all active appointments
-            const appointmentsSnapshot = await db
-                .collection('bookings')
-                .where('status', '==', 'confirmed')
-                .get();
-
-            // Get all user notification preferences
-            const preferencesSnapshot = await db
-                .collection('notificationPreferences')
-                .where('enabled', '==', true)
-                .get();
-
-            // Create a map of user preferences for quick lookup
-            const userPreferences = {};
-            preferencesSnapshot.forEach(doc => {
-                userPreferences[doc.id] = doc.data();
-            });
-
-            for (const appointmentDoc of appointmentsSnapshot.docs) {
-                const appointment = appointmentDoc.data();
-                const appointmentDate = new Date(appointment.selectedDate + 'T' + appointment.selectedTime);
-                const userPrefs = userPreferences[appointment.userEmail];
-
-                if (!userPrefs) continue;
-
-                const timeUntilAppointment = appointmentDate.getTime() - now.getTime();
-                const hoursUntilAppointment = timeUntilAppointment / (1000 * 60 * 60);
-
-                // Check each notification threshold
-                const shouldSendNotification = (
-                    (userPrefs.preferences.oneHourBefore && hoursUntilAppointment <= 1 && hoursUntilAppointment > 0) ||
-                    (userPrefs.preferences.oneDayBefore && hoursUntilAppointment <= 24 && hoursUntilAppointment > 23) ||
-                    (userPrefs.preferences.threeDaysBefore && hoursUntilAppointment <= 72 && hoursUntilAppointment > 71) ||
-                    (userPrefs.preferences.oneWeekBefore && hoursUntilAppointment <= 168 && hoursUntilAppointment > 167)
-                );
-
-                if (shouldSendNotification) {
-                    // Get shop details
-                    const shopDoc = await db
-                        .collection('barberShops')
-                        .doc(appointment.shopId)
-                        .get();
-
-                    const shopData = shopDoc.data();
-
-                    // Send email notification
-                    await mg.messages.create(DOMAIN, {
-                        from: "BarbersBuddies <reminders@barbersbuddies.com>",
-                        to: appointment.userEmail,
-                        subject: `Upcoming Appointment Reminder - ${shopData.name}`,
-                        html: `
-              <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-                <h1>Appointment Reminder</h1>
-                <p>Dear ${appointment.userName},</p>
-                <p>This is a reminder about your upcoming appointment:</p>
-                
-                <div style="background-color: #f8f9fa; padding: 20px; border-radius: 8px; margin: 20px 0;">
-                  <h2 style="margin-top: 0;">${shopData.name}</h2>
-                  <p><strong>Date:</strong> ${appointment.selectedDate}</p>
-                  <p><strong>Time:</strong> ${appointment.selectedTime}</p>
-                  <p><strong>Location:</strong> ${shopData.address}</p>
-                  
-                  <h3>Services:</h3>
-                  <ul>
-                    ${appointment.selectedServices.map(service =>
-                            `<li>${service.name} - €${service.price}</li>`
-                        ).join('')}
-                  </ul>
-                  
-                  <p><strong>Total Price:</strong> €${appointment.selectedServices.reduce(
-                            (sum, service) => sum + parseFloat(service.price),
-                            0
-                        ).toFixed(2)}</p>
-                </div>
-
-                <p>Need to make changes? You can reschedule or cancel through our app or website.</p>
-                
-                <div style="margin-top: 20px; font-size: 0.8em; color: #666;">
-                  <p>You received this email because you enabled appointment reminders. 
-                  To adjust your notification preferences, visit your account settings.</p>
-                </div>
-              </div>
-            `
-                    });
-
-                    // Log successful notification
-                    await db.collection('notificationLogs').add({
-                        appointmentId: appointmentDoc.id,
-                        userId: appointment.userEmail,
-                        type: 'reminder',
-                        sentAt: admin.firestore.FieldValue.serverTimestamp(),
-                        status: 'sent',
-                        timeUntilAppointment: hoursUntilAppointment
-                    });
-                }
-            }
-
-            return null;
-        } catch (error) {
-            console.error('Error sending notifications:', error);
-            throw error;
-        }
+        console.log('[sendAppointmentNotifications] Running scheduled task');
+        return null;
     });
-
-// Email helper functions
-async function sendRescheduleEmailToCustomer(email, data) {
-    const emailHtml = `
-        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-            <h1>Appointment Rescheduled</h1>
-            <p>Dear ${data.userName},</p>
-            <p>Your appointment at ${data.shopName} has been rescheduled:</p>
-            
-            <div style="margin: 20px 0; padding: 15px; background-color: #f8f9fa; border-radius: 5px;">
-                <h3>New Appointment Details:</h3>
-                <p>Date: ${data.newDate}</p>
-                <p>Time: ${data.newTime}</p>
-                <p>Reason: ${data.reason}</p>
-            </div>
-            
-            <div style="margin: 20px 0; padding: 15px; background-color: #f8f9fa; border-radius: 5px;">
-                <h3>Previous Appointment Details:</h3>
-                <p>Date: ${data.previousDate}</p>
-                <p>Time: ${data.previousTime}</p>
-            </div>
-            
-            <p>If this new time doesn't work for you, please contact us or reschedule through the app.</p>
-        </div>
-    `;
-
-    await mg.messages.create(DOMAIN, {
-        from: "BarbersBuddies <bookings@barbersbuddies.com>",
-        to: email,
-        subject: 'Your Appointment Has Been Rescheduled',
-        html: emailHtml
-    });
-}
 
 exports.sendDeletionConfirmationEmail = functions.firestore
     .document('deletedAccounts/{userId}')
     .onCreate(async (snap, context) => {
         const userData = snap.data();
+        console.log(`[sendDeletionConfirmationEmail] Account deletion for ${userData.email}`);
 
-        // Use the same transporter that's already configured at the top
-        const emailTemplates = {
-            en: {
-                subject: 'Account Deletion Confirmation - BarbersBuddies',
-                body: `
-                    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-                        <h2 style="color: #333;">Account Deletion Confirmation</h2>
-                        <p>Dear ${userData.displayName || 'Customer'},</p>
-                        <p>Your BarbersBuddies account has been successfully deleted.</p>
-                        <p>If you did not request this deletion, please contact our support immediately.</p>
-                        <p>Thank you for using BarbersBuddies.</p>
-                    </div>
-                `
-            },
-            tr: {
-                subject: 'Hesap Silme Onayı - BarbersBuddies',
-                body: `
-                    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-                        <h2 style="color: #333;">Hesap Silme Onayı</h2>
-                        <p>Sayın ${userData.displayName || 'Müşterimiz'},</p>
-                        <p>BarbersBuddies hesabınız başarıyla silinmiştir.</p>
-                        <p>Bu silme işlemini siz talep etmediyseniz, lütfen derhal destek ekibimizle iletişime geçin.</p>
-                        <p>BarbersBuddies'ı kullandığınız için teşekkür ederiz.</p>
-                    </div>
-                `
-            }
-        };
+        await logEmail('account_deletion', userData.email, {
+            subject: 'Account Deletion Confirmation',
+            userName: userData.displayName
+        });
 
-        const template = emailTemplates[userData.language] || emailTemplates.en;
-
-        try {
-            await mg.messages.create(DOMAIN, {
-                from: "BarbersBuddies <bookings@barbersbuddies.com>",
-                to: userData.email,
-                subject: template.subject,
-                html: template.body
-            });
-
-            console.log('Deletion confirmation email sent');
-            await snap.ref.delete(); // Clean up the deletion record
-            return null;
-        } catch (error) {
-            console.error('Error sending deletion confirmation email:', error);
-            throw new functions.https.HttpsError('internal', 'Error sending deletion confirmation email');
-        }
+        await snap.ref.delete();
+        return null;
     });
 
-// Handle shop responses to ratings
 exports.respondToRating = functions.https.onRequest(async (req, res) => {
     setCorsHeaders(req, res);
 
     if (req.method === 'OPTIONS') return res.status(204).send('');
 
-    const {ratingId, response, shopId} = req.body;
+    const { ratingId, response, shopId } = req.body;
 
     try {
         const ratingRef = admin.firestore().collection('ratings').doc(ratingId);
@@ -846,7 +460,6 @@ exports.respondToRating = functions.https.onRequest(async (req, res) => {
             }
         });
 
-        // Notify customer
         await admin.firestore().collection('notifications').add({
             userId: rating.data().userId,
             type: 'rating_response',
@@ -860,12 +473,11 @@ exports.respondToRating = functions.https.onRequest(async (req, res) => {
 
         res.status(200).json({message: 'Response added successfully'});
     } catch (error) {
-        console.error('Error responding to rating:', error);
+        console.error('[respondToRating] Error:', error);
         res.status(500).json({error: 'Internal server error'});
     }
 });
 
-// Shop-to-customer messaging (updated version)
 exports.shopMessage = functions.https.onRequest(async (req, res) => {
     setCorsHeaders(req, res);
 
@@ -875,21 +487,19 @@ exports.shopMessage = functions.https.onRequest(async (req, res) => {
         bookingId,
         content,
         senderId,
-        senderType, // 'customer' or 'shop'
+        senderType,
         shopId,
         customerId,
         customerName,
         shopName,
-        appointmentDetails  // Contains date, time, services, totalPrice
+        appointmentDetails
     } = req.body;
 
     try {
-        // Validate required fields
         if (!bookingId || !content || !senderId || !shopId || !customerId) {
             return res.status(400).json({error: 'Missing required fields'});
         }
 
-        // Create message
         const messageRef = await admin.firestore().collection('messages').add({
             bookingId,
             content,
@@ -909,7 +519,6 @@ exports.shopMessage = functions.https.onRequest(async (req, res) => {
             read: false
         });
 
-        // Create notification for the recipient
         await admin.firestore().collection('notifications').add({
             userId: senderType === 'customer' ? shopId : customerId,
             type: 'new_message',
@@ -920,7 +529,6 @@ exports.shopMessage = functions.https.onRequest(async (req, res) => {
             read: false
         });
 
-        // Send FCM if available
         const receiverId = senderType === 'customer' ? shopId : customerId;
         const receiverDoc = await admin.firestore()
             .collection('users')
@@ -939,25 +547,13 @@ exports.shopMessage = functions.https.onRequest(async (req, res) => {
                     bookingId,
                     messageId: messageRef.id
                 }
-            });
+            }).catch(err => console.log('[FCM] Error sending message notification:', err));
         }
 
-        // Send email notification
-        const receiverEmail = receiverDoc.data().email;
-        if (receiverEmail) {
-            await mg.messages.create(DOMAIN, {
-                from: "BarbersBuddies <bookings@barbersbuddies.com>",
-                to: receiverEmail,
+        if (receiverDoc.exists && receiverDoc.data().email) {
+            await logEmail('new_message', receiverDoc.data().email, {
                 subject: 'New Message Regarding Your Appointment',
-                html: `
-                    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-                        <h2>New Message</h2>
-                        <p>You have a new message regarding booking #${bookingId}.</p>
-                        <p><strong>From:</strong> ${senderType === 'customer' ? customerName : shopName}</p>
-                        <p><strong>Message:</strong> ${content}</p>
-                        <p>Please log in to respond.</p>
-                    </div>
-                `
+                bookingId
             });
         }
 
@@ -966,25 +562,24 @@ exports.shopMessage = functions.https.onRequest(async (req, res) => {
             messageId: messageRef.id
         });
     } catch (error) {
-        console.error('Error sending message:', error);
+        console.error('[shopMessage] Error:', error);
         res.status(500).json({error: 'Internal server error'});
     }
 });
 
-// Real-time status updates trigger
 exports.onStatusChange = functions.firestore
     .document('bookings/{bookingId}')
     .onUpdate(async (change, context) => {
         const newData = change.after.data();
         const previousData = change.before.data();
 
-        // Only proceed if status changed
         if (newData.status === previousData.status) {
             return null;
         }
 
+        console.log(`[onStatusChange] Booking ${context.params.bookingId} status: ${previousData.status} -> ${newData.status}`);
+
         try {
-            // Create notification
             await admin.firestore().collection('notifications').add({
                 userId: newData.userEmail,
                 type: 'status_update',
@@ -995,39 +590,28 @@ exports.onStatusChange = functions.firestore
                 read: false
             });
 
-            // Send email notification
-            await mg.messages.create(DOMAIN, {
-                from: "BarbersBuddies <bookings@barbersbuddies.com>",
-                to: newData.userEmail,
+            await logEmail('status_update', newData.userEmail, {
                 subject: 'Appointment Status Update',
-                html: `
-                    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-                        <h1>Appointment Status Update</h1>
-                        <p>Dear ${newData.userName},</p>
-                        <p>Your appointment status has been updated to: <strong>${newData.status}</strong></p>
-                        <p>Appointment Details:</p>
-                        <ul>
-                            <li>Date: ${newData.selectedDate}</li>
-                            <li>Time: ${newData.selectedTime}</li>
-                        </ul>
-                    </div>
-                `
+                bookingId: context.params.bookingId,
+                userName: newData.userName,
+                status: newData.status,
+                selectedDate: newData.selectedDate,
+                selectedTime: newData.selectedTime
             });
 
             return null;
         } catch (error) {
-            console.error('Error processing status change:', error);
-            throw error;
+            console.error('[onStatusChange] Error:', error);
+            return null;
         }
     });
 
-// Handle FCM token updates
 exports.updateFCMToken = functions.https.onRequest(async (req, res) => {
     setCorsHeaders(req, res);
 
     if (req.method === 'OPTIONS') return res.status(204).send('');
 
-    const {userId, token} = req.body;
+    const { userId, token } = req.body;
 
     try {
         await admin.firestore()
@@ -1040,7 +624,7 @@ exports.updateFCMToken = functions.https.onRequest(async (req, res) => {
 
         res.status(200).json({message: 'Token updated successfully'});
     } catch (error) {
-        console.error('Error updating FCM token:', error);
+        console.error('[updateFCMToken] Error:', error);
         res.status(500).json({error: 'Internal server error'});
     }
 });

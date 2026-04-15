@@ -1,4 +1,4 @@
-import React, {useContext, useEffect, useMemo, useState} from 'react';
+﻿import React, {useContext, useEffect, useMemo, useState} from 'react';
 import {useNavigate, useParams} from 'react-router-dom';
 import {
     addDoc,
@@ -27,6 +27,12 @@ import {CheckCircleIcon, XCircleIcon} from '@heroicons/react/24/solid';
 import {motion} from 'framer-motion';
 import {onAuthStateChanged} from 'firebase/auth';
 import {format} from 'date-fns';
+import {
+    createBooking,
+    checkSlotAvailability,
+    reserveTimeSlot,
+    BOOKING_STATUS
+} from '../Services/bookingService';
 
 import 'swiper/css';
 import 'swiper/css/navigation';
@@ -219,12 +225,10 @@ const BookNow = () => {
     const handleBooking = async (e) => {
         e.preventDefault();
 
-        // Only process if we're on the final step
         if (step !== 4) {
             return;
         }
 
-        // Check for required fields including phone
         if (!userName || !userEmail || !selectedDate || selectedServices.length === 0 || !selectedTime) {
             setStatusType('error');
             setBookingStatus({
@@ -234,8 +238,7 @@ const BookNow = () => {
             return;
         }
 
-        // Add phone number validation
-        if (!userPhone || userPhone.replace(/\D/g, '').length < 6) {  // Remove non-digits and check length
+        if (!userPhone || userPhone.replace(/\D/g, '').length < 6) {
             setStatusType('error');
             setBookingStatus({
                 type: 'error',
@@ -247,11 +250,9 @@ const BookNow = () => {
         setIsLoading(true);
         setBookingStatus('');
 
-        // First, try to reserve the time slot
-        let timeSlotDocRef;
+        let timeSlotId = null;
         try {
             if (selectedEmployee) {
-                // Add employee-specific availability check
                 const employeeSchedule = selectedEmployee.schedule[new Date(selectedDate).toLocaleDateString('en-US', {weekday: 'long'})];
                 const selectedHour = parseInt(selectedTime.split(':')[0]);
 
@@ -260,47 +261,28 @@ const BookNow = () => {
                 }
             }
 
-            // Check if slot is already taken - now with employee-specific check
-            const timeSlotQuery = query(
-                collection(db, 'bookedTimeSlots'),
-                where('shopId', '==', shop.id),
-                where('date', '==', selectedDate),
-                where('time', '==', selectedTime),
-                where('status', 'in', ['booked', 'pending']),
-                ...(selectedEmployee ? [where('employeeId', '==', selectedEmployee.id)] : [])
+            const availabilityCheck = await checkSlotAvailability(
+                shop.id,
+                selectedDate,
+                selectedTime,
+                null,
+                selectedEmployee?.id
             );
 
-            console.log("Checking availability with query:", {
-                shopId: shop.id,
-                date: selectedDate,
-                time: selectedTime,
-                employeeId: selectedEmployee?.id
-            });
-
-            const existingSlots = await getDocs(timeSlotQuery);
-
-            console.log("Existing slots found:", existingSlots.docs.map(doc => doc.data()));
-
-            if (!existingSlots.empty) {
+            if (!availabilityCheck.available) {
                 throw new Error('This time slot has just been taken. Please select another time.');
             }
 
-            // Create the time slot reservation
-            timeSlotDocRef = await addDoc(collection(db, 'bookedTimeSlots'), {
-                shopId: shop.id,
-                date: selectedDate,
-                time: selectedTime,
-                status: 'pending',
-                createdAt: serverTimestamp(),
-                employeeId: selectedEmployee?.id || null,
-                employeeName: selectedEmployee?.name || null
-            });
-        } catch (slotError) {
-            console.error("Slot booking error:", slotError, {
-                selectedEmployee,
+            timeSlotId = await reserveTimeSlot(
+                shop.id,
                 selectedDate,
-                selectedTime
-            });
+                selectedTime,
+                null,
+                selectedEmployee?.id,
+                selectedEmployee?.name
+            );
+        } catch (slotError) {
+            console.error("Slot booking error:", slotError);
             setStatusType('error');
             setBookingStatus({
                 type: 'error',
@@ -322,7 +304,7 @@ const BookNow = () => {
             selectedTime,
             totalPrice,
             status: 'pending',
-            timeSlotId: timeSlotDocRef.id,
+            timeSlotId: timeSlotId,
             createdAt: new Date().toISOString(),
             employeeId: selectedEmployee?.id || null,
             employeeName: selectedEmployee?.name || null
@@ -348,13 +330,15 @@ const BookNow = () => {
                 const batch = writeBatch(db);
 
                 // Update time slot
-                const timeSlotRef = doc(db, 'bookedTimeSlots', timeSlotDocRef.id);
-                batch.update(timeSlotRef, {
-                    status: 'booked',
-                    bookingId: bookingId,
-                    employeeId: selectedEmployee?.id || null,
-                    employeeName: selectedEmployee?.name || null
-                });
+                if (timeSlotId) {
+                    const timeSlotRef = doc(db, 'bookedTimeSlots', timeSlotId);
+                    batch.update(timeSlotRef, {
+                        status: 'booked',
+                        bookingId: bookingId,
+                        employeeId: selectedEmployee?.id || null,
+                        employeeName: selectedEmployee?.name || null
+                    });
+                }
 
                 // Update booking document directly
                 const bookingRef = doc(db, 'bookings', bookingId);
@@ -394,7 +378,6 @@ const BookNow = () => {
                     console.log('Notification created successfully for booking:', bookingId);
                 } catch (notificationError) {
                     console.error('Error creating notification:', notificationError);
-                    // Continue with booking success even if notification fails
                 }
 
                 setStatusType('success');
@@ -406,7 +389,9 @@ const BookNow = () => {
                 resetForm();
             } else {
                 // If booking failed, delete the time slot reservation
-                await deleteDoc(doc(db, 'bookedTimeSlots', timeSlotDocRef.id));
+                if (timeSlotId) {
+                    await deleteDoc(doc(db, 'bookedTimeSlots', timeSlotId));
+                }
 
                 setStatusType('error');
                 setBookingStatus({
@@ -416,8 +401,8 @@ const BookNow = () => {
             }
         } catch (error) {
             // If there's an error, clean up the time slot reservation
-            if (timeSlotDocRef) {
-                await deleteDoc(doc(db, 'bookedTimeSlots', timeSlotDocRef.id));
+            if (timeSlotId) {
+                await deleteDoc(doc(db, 'bookedTimeSlots', timeSlotId));
             }
 
             console.error('Error booking appointment:', error);
@@ -641,86 +626,86 @@ const BookNow = () => {
             continue: "Continue"
         },
         tr: {
-            loading: "Yükleniyor...",
-            pickMoreServices: "Daha fazla hizmet seç",
-            removeService: "Kaldır",
-            shopNotFound: "Dükkan bulunamadı.",
-            aboutUs: "Hakkımızda",
+            loading: "Y├╝kleniyor...",
+            pickMoreServices: "Daha fazla hizmet se├з",
+            removeService: "Kald─▒r",
+            shopNotFound: "D├╝kkan bulunamad─▒.",
+            aboutUs: "Hakk─▒m─▒zda",
             address: "Adres:",
             phone: "Telefon:",
             total: "Toplam",
             email: "E-posta:",
             ourServices: "Hizmetlerimiz",
-            bookYourAppointment: "Randevunuzu Alın",
-            name: "İsim (gerekli)",
+            bookYourAppointment: "Randevunuzu Al─▒n",
+            name: "─░sim (gerekli)",
             emailRequired: "E-posta (gerekli)",
             phoneOptional: "Telefon (gerekli)",
-            selectDate: "Bir Tarih Seçin",
-            selectService: "Bir Hizmet Seçin",
-            chooseService: "Bir hizmet seçin",
-            selectTime: "Bir Saat Seçin",
-            chooseTimeSlot: "Bir zaman dilimi seçin",
+            selectDate: "Bir Tarih Se├зin",
+            selectService: "Bir Hizmet Se├зin",
+            chooseService: "Bir hizmet se├зin",
+            selectTime: "Bir Saat Se├зin",
+            chooseTimeSlot: "Bir zaman dilimi se├зin",
             bookAppointment: "Randevu Al",
-            availability: "Müsaitlik",
-            closed: "Kapalı",
-            fillAllFields: "Lütfen tüm gerekli alanları doldurun ve en az bir hizmet seçin.",
-            bookingSuccessful: "Rezervasyon başarılı! Onay e-postaları gönderildi.",
-            bookingFailed: "Rezervasyon başarısız oldu. Lütfen tekrar deneyin.",
-            errorOccurred: "Bir hata oluştu. Lütfen tekrar deneyin."
+            availability: "M├╝saitlik",
+            closed: "Kapal─▒",
+            fillAllFields: "L├╝tfen t├╝m gerekli alanlar─▒ doldurun ve en az bir hizmet se├зin.",
+            bookingSuccessful: "Rezervasyon ba┼Яar─▒l─▒! Onay e-postalar─▒ g├╢nderildi.",
+            bookingFailed: "Rezervasyon ba┼Яar─▒s─▒z oldu. L├╝tfen tekrar deneyin.",
+            errorOccurred: "Bir hata olu┼Яtu. L├╝tfen tekrar deneyin."
         },
         ar: {
-            loading: "جاري التحميل...",
-            shopNotFound: "لم يتم العثور على المحل.",
-            pickMoreServices: "اختر المزيد من الخدمات",
-            removeService: "إزالة",
-            aboutUs: "معلومات عنا",
-            total: "المجموع",
-            address: "العنوان:",
-            phone: "الهاتف:",
-            email: "البريد الإلكتروني:",
-            ourServices: "خدماتنا",
-            bookYourAppointment: "احجز موعدك",
-            name: "الاسم (مطلوب)",
-            emailRequired: "البريد الإلكتروني (مطلوب)",
-            phoneOptional: "الهاتف (مطلوب)",
-            selectDate: "اختر تاريخًا",
-            selectService: "اختر خدمة",
-            chooseService: "اختر خدمة",
-            selectTime: "اختر وقتًا",
-            chooseTimeSlot: "اختر فترة زمنية",
-            bookAppointment: "احجز الموعد",
-            availability: "الأوقات المتاحة",
-            closed: "مغلق",
-            fillAllFields: "يرجى ملء جميع الحقول المطلوبة واختيار خدمة واحدة على الأقل.",
-            bookingSuccessful: "تم الحجز بنجاح! تم إرسال رسائل التأكيد عبر البريد الإلكتروني.",
-            bookingFailed: "فشل الحجز. يرجى المحاولة مرة أخرى.",
-            errorOccurred: "حدث خطأ. يرجى المحاولة مرة أخرى."
+            loading: "╪м╪з╪▒┘К ╪з┘Д╪к╪н┘Е┘К┘Д...",
+            shopNotFound: "┘Д┘Е ┘К╪к┘Е ╪з┘Д╪╣╪л┘И╪▒ ╪╣┘Д┘Й ╪з┘Д┘Е╪н┘Д.",
+            pickMoreServices: "╪з╪о╪к╪▒ ╪з┘Д┘Е╪▓┘К╪п ┘Е┘Ж ╪з┘Д╪о╪п┘Е╪з╪к",
+            removeService: "╪е╪▓╪з┘Д╪й",
+            aboutUs: "┘Е╪╣┘Д┘И┘Е╪з╪к ╪╣┘Ж╪з",
+            total: "╪з┘Д┘Е╪м┘Е┘И╪╣",
+            address: "╪з┘Д╪╣┘Ж┘И╪з┘Ж:",
+            phone: "╪з┘Д┘З╪з╪к┘Б:",
+            email: "╪з┘Д╪и╪▒┘К╪п ╪з┘Д╪е┘Д┘Г╪к╪▒┘И┘Ж┘К:",
+            ourServices: "╪о╪п┘Е╪з╪к┘Ж╪з",
+            bookYourAppointment: "╪з╪н╪м╪▓ ┘Е┘И╪╣╪п┘Г",
+            name: "╪з┘Д╪з╪│┘Е (┘Е╪╖┘Д┘И╪и)",
+            emailRequired: "╪з┘Д╪и╪▒┘К╪п ╪з┘Д╪е┘Д┘Г╪к╪▒┘И┘Ж┘К (┘Е╪╖┘Д┘И╪и)",
+            phoneOptional: "╪з┘Д┘З╪з╪к┘Б (┘Е╪╖┘Д┘И╪и)",
+            selectDate: "╪з╪о╪к╪▒ ╪к╪з╪▒┘К╪о┘Л╪з",
+            selectService: "╪з╪о╪к╪▒ ╪о╪п┘Е╪й",
+            chooseService: "╪з╪о╪к╪▒ ╪о╪п┘Е╪й",
+            selectTime: "╪з╪о╪к╪▒ ┘И┘В╪к┘Л╪з",
+            chooseTimeSlot: "╪з╪о╪к╪▒ ┘Б╪к╪▒╪й ╪▓┘Е┘Ж┘К╪й",
+            bookAppointment: "╪з╪н╪м╪▓ ╪з┘Д┘Е┘И╪╣╪п",
+            availability: "╪з┘Д╪г┘И┘В╪з╪к ╪з┘Д┘Е╪к╪з╪н╪й",
+            closed: "┘Е╪║┘Д┘В",
+            fillAllFields: "┘К╪▒╪м┘Й ┘Е┘Д╪б ╪м┘Е┘К╪╣ ╪з┘Д╪н┘В┘И┘Д ╪з┘Д┘Е╪╖┘Д┘И╪и╪й ┘И╪з╪о╪к┘К╪з╪▒ ╪о╪п┘Е╪й ┘И╪з╪н╪п╪й ╪╣┘Д┘Й ╪з┘Д╪г┘В┘Д.",
+            bookingSuccessful: "╪к┘Е ╪з┘Д╪н╪м╪▓ ╪и┘Ж╪м╪з╪н! ╪к┘Е ╪е╪▒╪│╪з┘Д ╪▒╪│╪з╪ж┘Д ╪з┘Д╪к╪г┘Г┘К╪п ╪╣╪и╪▒ ╪з┘Д╪и╪▒┘К╪п ╪з┘Д╪е┘Д┘Г╪к╪▒┘И┘Ж┘К.",
+            bookingFailed: "┘Б╪┤┘Д ╪з┘Д╪н╪м╪▓. ┘К╪▒╪м┘Й ╪з┘Д┘Е╪н╪з┘И┘Д╪й ┘Е╪▒╪й ╪г╪о╪▒┘Й.",
+            errorOccurred: "╪н╪п╪л ╪о╪╖╪г. ┘К╪▒╪м┘Й ╪з┘Д┘Е╪н╪з┘И┘Д╪й ┘Е╪▒╪й ╪г╪о╪▒┘Й."
         },
         de: {
             loading: "Wird geladen...",
-            shopNotFound: "Geschäft nicht gefunden.",
-            aboutUs: "Über uns",
+            shopNotFound: "Gesch├дft nicht gefunden.",
+            aboutUs: "├Ьber uns",
             address: "Adresse:",
             phone: "Telefon:",
             email: "E-Mail:",
             ourServices: "Unsere Dienstleistungen",
-            pickMoreServices: "Wählen Sie weitere Dienstleistungen",
+            pickMoreServices: "W├дhlen Sie weitere Dienstleistungen",
             removeService: "Entfernen",
             bookYourAppointment: "Buchen Sie Ihren Termin",
             name: "Name (erforderlich)",
             emailRequired: "E-Mail (erforderlich)",
             phoneOptional: "Telefon (erforderlich)",
-            selectDate: "Wählen Sie ein Datum",
+            selectDate: "W├дhlen Sie ein Datum",
             total: "Gesamt",
-            selectService: "Wählen Sie einen Service",
-            chooseService: "Wählen Sie einen Service",
-            selectTime: "Wählen Sie eine Uhrzeit",
-            chooseTimeSlot: "Wählen Sie einen Zeitslot",
+            selectService: "W├дhlen Sie einen Service",
+            chooseService: "W├дhlen Sie einen Service",
+            selectTime: "W├дhlen Sie eine Uhrzeit",
+            chooseTimeSlot: "W├дhlen Sie einen Zeitslot",
             bookAppointment: "Termin buchen",
-            availability: "Verfügbarkeit",
+            availability: "Verf├╝gbarkeit",
             closed: "Geschlossen",
-            fillAllFields: "Bitte füllen Sie alle erforderlichen Felder aus und wählen Sie mindestens einen Service.",
-            bookingSuccessful: "Buchung erfolgreich! Bestätigungs-E-Mails wurden gesendet.",
+            fillAllFields: "Bitte f├╝llen Sie alle erforderlichen Felder aus und w├дhlen Sie mindestens einen Service.",
+            bookingSuccessful: "Buchung erfolgreich! Best├дtigungs-E-Mails wurden gesendet.",
             bookingFailed: "Buchung fehlgeschlagen. Bitte versuchen Sie es erneut.",
             errorOccurred: "Ein Fehler ist aufgetreten. Bitte versuchen Sie es erneut."
         }
@@ -1120,7 +1105,7 @@ const BookNow = () => {
                                                                     navigate('/dashboard/customers');
                                                                 }}
                                                             >
-                                                                Great! 🎉
+                                                                Great! ЁЯОЙ
                                                             </motion.button>
                                                         </div>
 

@@ -1,455 +1,325 @@
-import React, { useState, useEffect } from 'react';
+﻿import React, { useState, useEffect, useMemo } from 'react';
 import { motion } from 'framer-motion';
-import { collection, query, where, orderBy, getDocs, doc, updateDoc, Timestamp } from 'firebase/firestore';
+import {
+    collection,
+    query,
+    where,
+    orderBy,
+    getDocs,
+    doc,
+    updateDoc,
+    Timestamp
+} from 'firebase/firestore';
 import { db } from '../firebase';
-import { Calendar, Clock, User, DollarSign, CheckCircle, XCircle, MessageCircle, AlertTriangle } from 'lucide-react';
+import {
+    Calendar,
+    Clock,
+    User,
+    DollarSign,
+    CheckCircle,
+    XCircle,
+    MessageCircle,
+    AlertTriangle,
+    ChevronLeft,
+    ChevronRight,
+    Eye,
+    MoreVertical
+} from 'lucide-react';
+import ShopOwnerBookingModal from './ShopOwnerBookingModal';
+import { useShopBookings, useBookingActions } from '../hooks/useBookings';
+import { BOOKING_STATUS, normalizeBookingData } from '../Services/bookingService';
 
 const ShopCalendarTab = ({ shop, user }) => {
-    const [appointments, setAppointments] = useState([]);
     const [selectedDate, setSelectedDate] = useState(new Date());
     const [isLoading, setIsLoading] = useState(true);
-    const [view, setView] = useState('day'); // 'day', 'week', 'month'
-    const [showDetails, setShowDetails] = useState(null);
+    const [view, setView] = useState('day');
+    const [selectedBooking, setSelectedBooking] = useState(null);
+    const [showBookingModal, setShowBookingModal] = useState(false);
+    const [statsExpanded, setStatsExpanded] = useState(false);
 
-    useEffect(() => {
-        if (!shop?.id) return;
+    const { bookings, loading, filter, updateFilter, stats } = useShopBookings(shop?.id);
 
-        const fetchAppointments = async () => {
-            setIsLoading(true);
-            try {
-                // Format date for Firestore query
-                const startOfDay = new Date(selectedDate);
-                startOfDay.setHours(0, 0, 0, 0);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
 
-                const endOfDay = new Date(selectedDate);
-                endOfDay.setHours(23, 59, 59, 999);
+    const getDateBookings = useMemo(() => {
+        const dateStr = selectedDate.toISOString().split('T')[0];
+        return bookings.filter(b => b.selectedDate === dateStr);
+    }, [bookings, selectedDate]);
 
-                let startDate = startOfDay;
-                let endDate = endOfDay;
-
-                // Adjust query range based on view
-                if (view === 'week') {
-                    // Calculate start of week (Sunday)
-                    const day = startOfDay.getDay();
-                    startDate = new Date(startOfDay);
-                    startDate.setDate(startDate.getDate() - day);
-
-                    // Calculate end of week (Saturday)
-                    endDate = new Date(startDate);
-                    endDate.setDate(endDate.getDate() + 6);
-                    endDate.setHours(23, 59, 59, 999);
-                } else if (view === 'month') {
-                    // Calculate start of month
-                    startDate = new Date(startOfDay.getFullYear(), startOfDay.getMonth(), 1);
-
-                    // Calculate end of month
-                    endDate = new Date(startOfDay.getFullYear(), startOfDay.getMonth() + 1, 0, 23, 59, 59, 999);
-                }
-
-                // Format dates for Firestore query
-                const startDateStr = startDate.toISOString().split('T')[0];
-                const endDateStr = endDate.toISOString().split('T')[0];
-
-                // Query appointments for this shop within date range
-                const appointmentsRef = collection(db, 'bookings');
-                const q = query(
-                    appointmentsRef,
-                    where('shopId', '==', shop.id),
-                    where('selectedDate', '>=', startDateStr),
-                    where('selectedDate', '<=', endDateStr),
-                    orderBy('selectedDate'),
-                    orderBy('selectedTime')
-                );
-
-                const querySnapshot = await getDocs(q);
-                const fetchedAppointments = querySnapshot.docs.map(doc => ({
-                    id: doc.id,
-                    ...doc.data(),
-                    // Convert timestamp to JS Date if needed
-                    createdAt: doc.data().createdAt?.toDate() || new Date(),
-                }));
-
-                setAppointments(fetchedAppointments);
-            } catch (error) {
-                console.error('Error fetching appointments:', error);
-            } finally {
-                setIsLoading(false);
-            }
-        };
-
-        fetchAppointments();
-    }, [shop.id, selectedDate, view]);
-
-    const changeAppointmentStatus = async (appointmentId, newStatus) => {
-        try {
-            const appointmentRef = doc(db, 'bookings', appointmentId);
-            await updateDoc(appointmentRef, {
-                status: newStatus,
-                lastUpdated: Timestamp.now()
-            });
-
-            // Update local state
-            setAppointments(prev =>
-                prev.map(app =>
-                    app.id === appointmentId
-                        ? {...app, status: newStatus, lastUpdated: new Date()}
-                        : app
-                )
-            );
-
-            // Close details panel
-            setShowDetails(null);
-        } catch (error) {
-            console.error('Error updating appointment status:', error);
-        }
-    };
-
-    // Generate time slots for the day view
     const generateTimeSlots = () => {
-        const slots = [];
+        if (!shop?.availability) return [];
 
-        // Get opening hours from shop availability
         const dayOfWeek = selectedDate.toLocaleString('en-US', { weekday: 'long' });
-        const availability = shop.availability?.[dayOfWeek];
+        const availability = shop.availability[dayOfWeek];
 
         if (!availability || !availability.open || !availability.close) {
-            return []; // Shop is closed or no availability info
+            return [];
         }
 
-        // Parse opening hours
-        const openHour = parseInt(availability.open.split(':')[0]);
-        const openMinute = parseInt(availability.open.split(':')[1]);
-        const closeHour = parseInt(availability.close.split(':')[0]);
-        const closeMinute = parseInt(availability.close.split(':')[1]);
+        const slots = [];
+        const [openHour, openMinute] = availability.open.split(':').map(Number);
+        const [closeHour, closeMinute] = availability.close.split(':').map(Number);
 
-        // Generate 30-minute slots from opening to closing time
-        let currentHour = openHour;
-        let currentMinute = openMinute;
+        let currentMinutes = openHour * 60 + openMinute;
+        const endMinutes = closeHour * 60 + closeMinute;
 
-        while (
-            currentHour < closeHour ||
-            (currentHour === closeHour && currentMinute < closeMinute)
-            ) {
-            const timeString = `${currentHour.toString().padStart(2, '0')}:${currentMinute.toString().padStart(2, '0')}`;
-            slots.push(timeString);
-
-            // Increment by slot duration (default 30 minutes)
-            currentMinute += 30;
-            if (currentMinute >= 60) {
-                currentHour += 1;
-                currentMinute = 0;
-            }
+        while (currentMinutes < endMinutes) {
+            const hour = Math.floor(currentMinutes / 60);
+            const minute = currentMinutes % 60;
+            slots.push(`${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`);
+            currentMinutes += 30;
         }
 
         return slots;
     };
 
-    const formatDate = (dateString) => {
-        const date = new Date(dateString);
-        return date.toLocaleDateString('en-US', {
-            weekday: 'short',
-            month: 'short',
-            day: 'numeric'
-        });
-    };
-
-    // Find appointments for a specific time slot
-    const getAppointmentsForTimeSlot = (timeSlot) => {
-        const selectedDateStr = selectedDate.toISOString().split('T')[0];
-        return appointments.filter(
-            appointment =>
-                appointment.selectedDate === selectedDateStr &&
-                appointment.selectedTime === timeSlot
-        );
-    };
-
     const timeSlots = generateTimeSlots();
 
-    // Render day view
-    const renderDayView = () => {
-        if (timeSlots.length === 0) {
-            return (
-                <div className="p-4 text-center">
-                    <p>No available hours set for this day.</p>
-                </div>
-            );
+    const getAppointmentsForTimeSlot = (timeSlot) => {
+        return getDateBookings.filter(appointment => appointment.selectedTime === timeSlot);
+    };
+
+    const getStatusColor = (status) => {
+        switch (status) {
+            case BOOKING_STATUS.CONFIRMED:
+                return 'bg-success/20 border-l-4 border-success';
+            case BOOKING_STATUS.CANCELLED:
+                return 'bg-error/20 border-l-4 border-error';
+            case BOOKING_STATUS.COMPLETED:
+                return 'bg-info/20 border-l-4 border-info';
+            case BOOKING_STATUS.PENDING:
+                return 'bg-warning/20 border-l-4 border-warning';
+            case BOOKING_STATUS.NO_SHOW:
+                return 'bg-base-300/50 border-l-4 border-base-content/30';
+            case BOOKING_STATUS.RESCHEDULED:
+                return 'bg-secondary/20 border-l-4 border-secondary';
+            default:
+                return 'bg-base-200 border-l-4 border-base-300';
         }
+    };
 
+    const handleBookingClick = (booking) => {
+        setSelectedBooking(booking);
+        setShowBookingModal(true);
+    };
+
+    const handleBookingUpdate = () => {
+        setShowBookingModal(false);
+        setSelectedBooking(null);
+    };
+
+    const navigateDate = (direction) => {
+        const newDate = new Date(selectedDate);
+        if (direction === 'prev') {
+            newDate.setDate(newDate.getDate() - (view === 'day' ? 1 : view === 'week' ? 7 : 30));
+        } else {
+            newDate.setDate(newDate.getDate() + (view === 'day' ? 1 : view === 'week' ? 7 : 30));
+        }
+        setSelectedDate(newDate);
+    };
+
+    const goToToday = () => {
+        setSelectedDate(new Date());
+    };
+
+    if (loading && isLoading) {
         return (
-            <div className="overflow-auto max-h-[calc(100vh-300px)]">
-                {timeSlots.map(timeSlot => (
-                    <motion.div
-                        key={timeSlot}
-                        className="mb-2 relative"
-                        initial={{ opacity: 0, x: -10 }}
-                        animate={{ opacity: 1, x: 0 }}
-                        transition={{ duration: 0.3 }}
-                    >
-                        <div className="flex items-center border-l-4 border-primary pl-2 py-2">
-                            <Clock className="w-4 h-4 mr-2 text-primary" />
-                            <span className="text-sm font-medium">{timeSlot}</span>
-                        </div>
-
-                        <div className="pl-8 space-y-2 mt-1">
-                            {getAppointmentsForTimeSlot(timeSlot).map(appointment => (
-                                <motion.div
-                                    key={appointment.id}
-                                    className={`
-                    p-3 rounded-lg cursor-pointer
-                    ${getStatusColor(appointment.status)}
-                    hover:shadow-md transition-shadow
-                  `}
-                                    whileHover={{ scale: 1.02 }}
-                                    onClick={() => setShowDetails(appointment.id === showDetails ? null : appointment.id)}
-                                >
-                                    <div className="flex justify-between items-center">
-                                        <div className="font-medium">{appointment.userName}</div>
-                                        <div className="badge badge-sm">
-                                            {appointment.status === 'pending' && 'Pending'}
-                                            {appointment.status === 'confirmed' && 'Confirmed'}
-                                            {appointment.status === 'cancelled' && 'Cancelled'}
-                                            {appointment.status === 'completed' && 'Completed'}
-                                        </div>
-                                    </div>
-
-                                    <div className="text-xs">
-                                        {appointment.selectedServices?.map(service => service.name).join(", ")}
-                                    </div>
-
-                                    {showDetails === appointment.id && (
-                                        <motion.div
-                                            initial={{ opacity: 0, height: 0 }}
-                                            animate={{ opacity: 1, height: 'auto' }}
-                                            exit={{ opacity: 0, height: 0 }}
-                                            className="mt-2 pt-2 border-t border-base-300"
-                                        >
-                                            <div className="grid grid-cols-2 gap-2 text-xs mb-2">
-                                                <div>
-                                                    <span className="text-base-content/60">Phone:</span>{' '}
-                                                    {appointment.userPhone || 'Not provided'}
-                                                </div>
-                                                <div>
-                                                    <span className="text-base-content/60">Email:</span>{' '}
-                                                    {appointment.userEmail}
-                                                </div>
-                                                <div>
-                                                    <span className="text-base-content/60">Created:</span>{' '}
-                                                    {new Date(appointment.createdAt).toLocaleString()}
-                                                </div>
-                                                <div>
-                                                    <span className="text-base-content/60">Price:</span>{' '}
-                                                    €{appointment.selectedServices?.reduce((sum, service) => sum + parseFloat(service.price), 0).toFixed(2)}
-                                                </div>
-                                            </div>
-
-                                            <div className="flex gap-1 mt-2">
-                                                {appointment.status === 'pending' && (
-                                                    <button
-                                                        className="btn btn-xs btn-success gap-1"
-                                                        onClick={(e) => {
-                                                            e.stopPropagation();
-                                                            changeAppointmentStatus(appointment.id, 'confirmed');
-                                                        }}
-                                                    >
-                                                        <CheckCircle className="w-3 h-3" />
-                                                        Confirm
-                                                    </button>
-                                                )}
-
-                                                {(appointment.status === 'pending' || appointment.status === 'confirmed') && (
-                                                    <button
-                                                        className="btn btn-xs btn-error gap-1"
-                                                        onClick={(e) => {
-                                                            e.stopPropagation();
-                                                            changeAppointmentStatus(appointment.id, 'cancelled');
-                                                        }}
-                                                    >
-                                                        <XCircle className="w-3 h-3" />
-                                                        Cancel
-                                                    </button>
-                                                )}
-
-                                                {appointment.status === 'confirmed' && (
-                                                    <button
-                                                        className="btn btn-xs btn-info gap-1"
-                                                        onClick={(e) => {
-                                                            e.stopPropagation();
-                                                            changeAppointmentStatus(appointment.id, 'completed');
-                                                        }}
-                                                    >
-                                                        <CheckCircle className="w-3 h-3" />
-                                                        Complete
-                                                    </button>
-                                                )}
-
-                                                <button
-                                                    className="btn btn-xs btn-ghost gap-1"
-                                                    onClick={(e) => {
-                                                        e.stopPropagation();
-                                                        // Messaging functionality to be implemented
-                                                    }}
-                                                >
-                                                    <MessageCircle className="w-3 h-3" />
-                                                    Message
-                                                </button>
-                                            </div>
-                                        </motion.div>
-                                    )}
-                                </motion.div>
-                            ))}
-
-                            {getAppointmentsForTimeSlot(timeSlot).length === 0 && (
-                                <div className="p-2 text-xs text-base-content/50 text-center bg-base-200/50 rounded">
-                                    No appointments
-                                </div>
-                            )}
-                        </div>
-                    </motion.div>
-                ))}
+            <div className="h-64 flex items-center justify-center">
+                <div className="loading loading-spinner text-primary loading-lg"></div>
             </div>
         );
-    };
-
-    // Helper function to get color based on status
-    const getStatusColor = (status) => {
-        switch(status) {
-            case 'confirmed':
-                return 'bg-success/10 border-l-2 border-success';
-            case 'cancelled':
-                return 'bg-error/10 border-l-2 border-error';
-            case 'completed':
-                return 'bg-info/10 border-l-2 border-info';
-            case 'pending':
-            default:
-                return 'bg-warning/10 border-l-2 border-warning';
-        }
-    };
+    }
 
     return (
         <div className="h-full flex flex-col">
-            {/* Calendar Header */}
-            <div className="flex justify-between items-center mb-4">
+            <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 mb-4">
                 <div className="flex items-center gap-4">
-                    <button
-                        className="btn btn-sm btn-circle"
-                        onClick={() => {
-                            const newDate = new Date(selectedDate);
-                            newDate.setDate(selectedDate.getDate() - (view === 'day' ? 1 : view === 'week' ? 7 : 30));
-                            setSelectedDate(newDate);
-                        }}
-                    >
-                        &lt;
-                    </button>
+                    <div className="flex items-center gap-2">
+                        <button
+                            className="btn btn-sm btn-circle"
+                            onClick={() => navigateDate('prev')}
+                        >
+                            <ChevronLeft className="w-4 h-4" />
+                        </button>
 
-                    <h3 className="text-lg font-bold">
-                        {view === 'day' && selectedDate.toLocaleDateString('en-US', {
-                            weekday: 'long',
-                            month: 'long',
-                            day: 'numeric'
-                        })}
-                        {view === 'week' && `Week of ${new Date(selectedDate).toLocaleDateString('en-US', {
-                            month: 'short',
-                            day: 'numeric'
-                        })}`}
-                        {view === 'month' && selectedDate.toLocaleDateString('en-US', {
-                            month: 'long',
-                            year: 'numeric'
-                        })}
-                    </h3>
-
-                    <button
-                        className="btn btn-sm btn-circle"
-                        onClick={() => {
-                            const newDate = new Date(selectedDate);
-                            newDate.setDate(selectedDate.getDate() + (view === 'day' ? 1 : view === 'week' ? 7 : 30));
-                            setSelectedDate(newDate);
-                        }}
-                    >
-                        &gt;
-                    </button>
-                </div>
-
-                <div className="join">
-                    <button
-                        className={`join-item btn btn-sm ${view === 'day' ? 'btn-active' : 'btn-outline'}`}
-                        onClick={() => setView('day')}
-                    >
-                        Day
-                    </button>
-                    <button
-                        className={`join-item btn btn-sm ${view === 'week' ? 'btn-active' : 'btn-outline'}`}
-                        onClick={() => setView('week')}
-                    >
-                        Week
-                    </button>
-                    <button
-                        className={`join-item btn btn-sm ${view === 'month' ? 'btn-active' : 'btn-outline'}`}
-                        onClick={() => setView('month')}
-                    >
-                        Month
-                    </button>
-                </div>
-            </div>
-
-            {/* Calendar Content */}
-            {isLoading ? (
-                <div className="flex-1 flex items-center justify-center">
-                    <div className="loading loading-spinner text-primary"></div>
-                </div>
-            ) : (
-                <div className="flex-1">
-                    {view === 'day' && renderDayView()}
-
-                    {/* Week and Month views will be implemented in subsequent updates */}
-                    {view !== 'day' && (
-                        <div className="flex-1 flex items-center justify-center">
-                            <div className="text-center text-base-content/70">
-                                <AlertTriangle className="w-8 h-8 mx-auto mb-2 text-warning" />
-                                <p className="font-medium mb-1">{view.charAt(0).toUpperCase() + view.slice(1)} view coming soon</p>
-                                <p className="text-sm">Please use day view for now</p>
-                            </div>
+                        <div className="text-center min-w-[200px]">
+                            <h3 className="text-lg font-bold">
+                                {view === 'day' && selectedDate.toLocaleDateString('en-US', {
+                                    weekday: 'long',
+                                    month: 'long',
+                                    day: 'numeric'
+                                })}
+                                {view === 'week' && `Week of ${selectedDate.toLocaleDateString('en-US', {
+                                    month: 'short',
+                                    day: 'numeric'
+                                })}`}
+                                {view === 'month' && selectedDate.toLocaleDateString('en-US', {
+                                    month: 'long',
+                                    year: 'numeric'
+                                })}
+                            </h3>
                         </div>
-                    )}
-                </div>
-            )}
 
-            {/* Stats Footer */}
-            <div className="mt-4 p-2 bg-base-200 rounded-lg grid grid-cols-4 gap-2 text-center text-xs">
-                <div>
-                    <div className="font-medium">Today's Appointments</div>
-                    <div className="text-lg font-bold text-primary">
-                        {appointments.filter(a =>
-                            a.selectedDate === new Date().toISOString().split('T')[0]
-                        ).length}
+                        <button
+                            className="btn btn-sm btn-circle"
+                            onClick={() => navigateDate('next')}
+                        >
+                            <ChevronRight className="w-4 h-4" />
+                        </button>
                     </div>
+
+                    <button
+                        className="btn btn-sm btn-outline"
+                        onClick={goToToday}
+                    >
+                        Today
+                    </button>
                 </div>
-                <div>
-                    <div className="font-medium">Pending</div>
-                    <div className="text-lg font-bold text-warning">
-                        {appointments.filter(a => a.status === 'pending').length}
+
+                <div className="flex items-center gap-4">
+                    <div className="join">
+                        {['day', 'week', 'month'].map(v => (
+                            <button
+                                key={v}
+                                className={`join-item btn btn-sm ${view === v ? 'btn-active' : 'btn-outline'}`}
+                                onClick={() => setView(v)}
+                            >
+                                {v.charAt(0).toUpperCase() + v.slice(1)}
+                            </button>
+                        ))}
                     </div>
-                </div>
-                <div>
-                    <div className="font-medium">Confirmed</div>
-                    <div className="text-lg font-bold text-success">
-                        {appointments.filter(a => a.status === 'confirmed').length}
-                    </div>
-                </div>
-                <div>
-                    <div className="font-medium">Revenue</div>
-                    <div className="text-lg font-bold">
-                        €{appointments
-                        .filter(a => a.status !== 'cancelled')
-                        .reduce((sum, appointment) => {
-                            const serviceTotal = appointment.selectedServices?.reduce(
-                                (total, service) => total + parseFloat(service.price), 0
-                            ) || 0;
-                            return sum + serviceTotal;
-                        }, 0)
-                        .toFixed(2)}
-                    </div>
+
+                    <button
+                        className="btn btn-sm btn-ghost"
+                        onClick={() => setStatsExpanded(!statsExpanded)}
+                    >
+                        <MoreVertical className="w-4 h-4" />
+                    </button>
                 </div>
             </div>
+
+            <motion.div
+                initial={false}
+                animate={{ height: statsExpanded ? 'auto' : 0, opacity: statsExpanded ? 1 : 0 }}
+                className="overflow-hidden mb-4"
+            >
+                <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-2 p-4 bg-base-200 rounded-lg">
+                    <div className="stat py-2">
+                        <div className="stat-title text-xs">Pending</div>
+                        <div className="stat-value text-xl text-warning">{stats.pending}</div>
+                    </div>
+                    <div className="stat py-2">
+                        <div className="stat-title text-xs">Confirmed</div>
+                        <div className="stat-value text-xl text-success">{stats.confirmed}</div>
+                    </div>
+                    <div className="stat py-2">
+                        <div className="stat-title text-xs">Today</div>
+                        <div className="stat-value text-xl text-primary">{stats.todayTotal}</div>
+                    </div>
+                    <div className="stat py-2">
+                        <div className="stat-title text-xs">Completed</div>
+                        <div className="stat-value text-xl text-info">{stats.completed}</div>
+                    </div>
+                    <div className="stat py-2">
+                        <div className="stat-title text-xs">Cancelled</div>
+                        <div className="stat-value text-xl text-error">{stats.cancelled}</div>
+                    </div>
+                    <div className="stat py-2">
+                        <div className="stat-title text-xs">Revenue</div>
+                        <div className="stat-value text-xl text-success">тВм{stats.revenue.toFixed(0)}</div>
+                    </div>
+                </div>
+            </motion.div>
+
+            <div className="flex-1 overflow-auto">
+                {view === 'day' && (
+                    <div className="space-y-1">
+                        {timeSlots.length === 0 ? (
+                            <div className="text-center py-12 text-base-content/60">
+                                <AlertTriangle className="w-8 h-8 mx-auto mb-2" />
+                                <p>No working hours set for this day</p>
+                            </div>
+                        ) : (
+                            timeSlots.map(timeSlot => {
+                                const slotAppointments = getAppointmentsForTimeSlot(timeSlot);
+
+                                return (
+                                    <div key={timeSlot} className="flex gap-2 min-h-[60px] border-t border-base-200">
+                                        <div className="w-20 py-2 text-sm text-base-content/60 flex-shrink-0">
+                                            {timeSlot}
+                                        </div>
+                                        <div className="flex-1 py-1 space-y-1">
+                                            {slotAppointments.length === 0 ? (
+                                                <div className="h-10 flex items-center justify-center text-xs text-base-content/30">
+                                                    -
+                                                </div>
+                                            ) : (
+                                                slotAppointments.map(appointment => (
+                                                    <motion.div
+                                                        key={appointment.id}
+                                                        initial={{ opacity: 0, scale: 0.95 }}
+                                                        animate={{ opacity: 1, scale: 1 }}
+                                                        className={`
+                                                            p-2 rounded-lg cursor-pointer
+                                                            ${getStatusColor(appointment.status)}
+                                                            hover:shadow-md transition-shadow
+                                                        `}
+                                                        onClick={() => handleBookingClick(appointment)}
+                                                    >
+                                                        <div className="flex items-center justify-between">
+                                                            <div className="font-medium text-sm truncate">
+                                                                {appointment.userName}
+                                                            </div>
+                                                            <span className={`badge badge-xs ${
+                                                                appointment.status === BOOKING_STATUS.CONFIRMED ? 'badge-success' :
+                                                                appointment.status === BOOKING_STATUS.PENDING ? 'badge-warning' :
+                                                                appointment.status === BOOKING_STATUS.CANCELLED ? 'badge-error' :
+                                                                'badge-ghost'
+                                                            }`}>
+                                                                {appointment.status}
+                                                            </span>
+                                                        </div>
+                                                        <div className="text-xs text-base-content/60 truncate">
+                                                            {appointment.selectedServices?.map(s => s.name).join(', ')}
+                                                        </div>
+                                                        {appointment.employeeName && (
+                                                            <div className="text-xs text-base-content/40">
+                                                                {appointment.employeeName}
+                                                            </div>
+                                                        )}
+                                                    </motion.div>
+                                                ))
+                                            )}
+                                        </div>
+                                    </div>
+                                );
+                            })
+                        )}
+                    </div>
+                )}
+
+                {view !== 'day' && (
+                    <div className="flex items-center justify-center h-64">
+                        <div className="text-center">
+                            <AlertTriangle className="w-8 h-8 mx-auto mb-2 text-warning" />
+                            <p className="font-medium mb-1">{view.charAt(0).toUpperCase() + view.slice(1)} view</p>
+                            <p className="text-sm text-base-content/60">Using day view for detailed management</p>
+                        </div>
+                    </div>
+                )}
+            </div>
+
+            <ShopOwnerBookingModal
+                booking={selectedBooking}
+                isOpen={showBookingModal}
+                onClose={() => {
+                    setShowBookingModal(false);
+                    setSelectedBooking(null);
+                }}
+                shop={shop}
+                onUpdate={handleBookingUpdate}
+            />
         </div>
     );
 };

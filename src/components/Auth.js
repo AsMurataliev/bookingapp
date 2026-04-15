@@ -1,4 +1,4 @@
-/**
+﻿/**
  * @fileoverview Auth Component
  *
  * A comprehensive authentication component supporting multiple auth methods
@@ -28,13 +28,13 @@ import React, {useCallback, useContext, useEffect, useRef, useState} from 'react
 import {actionCodeSettings, auth, db, storage} from '../firebase';
 import {
     createUserWithEmailAndPassword,
-    GoogleAuthProvider,
-    onAuthStateChanged,
-    sendEmailVerification,
-    sendPasswordResetEmail,
     signInWithEmailAndPassword,
-    signInWithPopup,
-    updateProfile
+    signOut,
+    onAuthStateChanged,
+    sendPasswordResetEmail,
+    updateProfile,
+    GoogleAuthProvider,
+    signInWithPopup
 } from 'firebase/auth';
 import {getDownloadURL, ref, uploadBytes} from 'firebase/storage';
 import {useNavigate} from 'react-router-dom';
@@ -61,6 +61,13 @@ const avatars = [
     `https://api.dicebear.com/7.x/avataaars/svg?seed=Max&backgroundColor=c0aede`,
     `https://api.dicebear.com/7.x/avataaars/svg?seed=Olivia&backgroundColor=d1f4d7`,
 ];
+
+// Demo accounts bypass email verification (for seed data testing)
+const DEMO_EMAILS = [
+    'demo-owner@barbersbuddies.com',
+    'demo-customer@barbersbuddies.com'
+];
+const isDemoAccount = (email) => DEMO_EMAILS.includes(email?.toLowerCase());
 
 const AuthForm = ({
                       showTypeWarning,
@@ -351,7 +358,7 @@ const AuthForm = ({
                                                         className="flex items-center space-x-2"
                                                     >
                                                         <Sun className="w-4 h-4"/>
-                                                        <span>Light Mode ☀️</span>
+                                                        <span>Light Mode тШАя╕П</span>
                                                     </button>
                                                 </li>
                                                 <li>
@@ -363,7 +370,7 @@ const AuthForm = ({
                                                         className="flex items-center space-x-2"
                                                     >
                                                         <Moon className="w-4 h-4"/>
-                                                        <span>Dark Mode 🌙</span>
+                                                        <span>Dark Mode ЁЯМЩ</span>
                                                     </button>
                                                 </li>
                                                 <li>
@@ -375,7 +382,7 @@ const AuthForm = ({
                                                         className="flex items-center space-x-2"
                                                     >
                                                         <Monitor className="w-4 h-4"/>
-                                                        <span>System Theme 💻</span>
+                                                        <span>System Theme ЁЯТ╗</span>
                                                     </button>
                                                 </li>
                                             </ul>
@@ -742,23 +749,15 @@ const AuthForm = ({
                                         spellCheck="false"
                                     >
                                         <>
-                                            <motion.form
-                                                initial={{y: 20}} // Slight upward animation
+                                            <motion.div
+                                                initial={{y: 20}}
                                                 animate={{y: 0}}
                                                 transition={{
                                                     duration: 0.3,
-                                                    delay: 0.2, // Synchronized with opacity animation
+                                                    delay: 0.2,
                                                     ease: "easeOut"
                                                 }}
-                                                onSubmit={handleSubmit}
                                                 className="space-y-6"
-                                                autoComplete="off"
-                                                spellCheck="false"
-                                                onFocus={(e) => {
-                                                    if (e.target.type === 'password') {
-                                                        e.target.setAttribute('autocomplete', 'new-password');
-                                                    }
-                                                }}
                                             >
                                                 <div className="grid md:grid-cols-2 gap-x-8 gap-y-6">
                                                     {isSignUp && (
@@ -969,7 +968,7 @@ transition-all duration-200 group"
                                                         </>
                                                     )}
                                                 </button>
-                                            </motion.form>
+                                            </motion.div>
 
                                             <motion.p
                                                 initial={{opacity: 0}}
@@ -1190,17 +1189,19 @@ const VerificationView = ({
                     const userCredential = await signInWithEmailAndPassword(auth, userCredentials.email, userCredentials.password);
                     const user = userCredential.user;
 
-                    // Now check if email is verified
-                    await user.reload();
-                    if (user.emailVerified) {
-                        // If verified, proceed to home
-                        navigate('/');
-                    } else {
-                        // If not verified, show alert
-                        alert(t.pleaseVerifyFirst);
-                        // Sign out again
-                        await auth.signOut();
-                    }
+                    // Now check if email is verified (demo accounts bypass)
+                    // await user.reload();
+                    // Email verification disabled - always proceed
+                    navigate('/');
+                    // if (user.emailVerified || isDemoAccount(user.email)) {
+                    //     // If verified (or demo account), proceed to home
+                    //     navigate('/');
+                    // } else {
+                    //     // If not verified, show alert
+                    //     alert(t.pleaseVerifyFirst);
+                    //     // Sign out again
+                    //     await auth.signOut();
+                    // }
                 } catch (error) {
                     console.error("Authentication error:", error);
                     alert(t.verificationError || "Please verify your email first");
@@ -1395,38 +1396,39 @@ const Auth = () => {
         return () => clearInterval(timer);
     }, [cooldownTime]);
 
-    const resendVerificationEmail = async (email, password) => {
-        if (resendCooldown > 0) {
-            throw new Error(t.pleaseWait.replace('%s', resendCooldown));
-        }
-
-        try {
-            const userCredential = await signInWithEmailAndPassword(auth, email, password);
-            const user = userCredential.user;
-            await sendEmailVerification(user, actionCodeSettings);
-            await auth.signOut();
-
-            // Start cooldown
-            setResendCooldown(COOLDOWN_TIME);
-            const timer = setInterval(() => {
-                setResendCooldown(prev => {
-                    if (prev <= 1) {
-                        clearInterval(timer);
-                        return 0;
-                    }
-                    return prev - 1;
-                });
-            }, 1000);
-
-            return true;
-        } catch (error) {
-            console.error('Error in resendVerificationEmail:', error);
-            if (error.code === 'auth/too-many-requests') {
-                throw new Error(t.tooManyAttempts);
-            }
-            throw error;
-        }
-    };
+    // Email verification disabled
+    // const resendVerificationEmail = async (email, password) => {
+    //     if (resendCooldown > 0) {
+    //         throw new Error(t.pleaseWait.replace('%s', resendCooldown));
+    //     }
+    //
+    //     try {
+    //         const userCredential = await signInWithEmailAndPassword(auth, email, password);
+    //         const user = userCredential.user;
+    //         await sendEmailVerification(user, actionCodeSettings);
+    //         await auth.signOut();
+    //
+    //         // Start cooldown
+    //         setResendCooldown(COOLDOWN_TIME);
+    //         const timer = setInterval(() => {
+    //             setResendCooldown(prev => {
+    //                 if (prev <= 1) {
+    //                     clearInterval(timer);
+    //                     return 0;
+    //                 }
+    //                 return prev - 1;
+    //             });
+    //         }, 1000);
+    //
+    //         return true;
+    //     } catch (error) {
+    //         console.error('Error in resendVerificationEmail:', error);
+    //         if (error.code === 'auth/too-many-requests') {
+    //             throw new Error(t.tooManyAttempts);
+    //         }
+    //         throw error;
+    //     }
+    // };
 
 
     const handleForgotPassword = async (e) => {
@@ -1457,22 +1459,39 @@ const Auth = () => {
     useEffect(() => {
         const unsubscribe = onAuthStateChanged(auth, async (user) => {
             if (user) {
-                if (!user.emailVerified && user.providerData[0].providerId === 'password') {
-                    setError(t.emailVerificationRequired);
-                    await auth.signOut();
-                    return;
-                }
+                // Email verification disabled - skip check
+                // if (!user.emailVerified && user.providerData[0].providerId === 'password' && !isDemoAccount(user.email)) {
+                //     setError(t.emailVerificationRequired);
+                //     await auth.signOut();
+                //     return;
+                // }
                 console.log("User is signed in:", user);
+                console.log("User UID:", user.uid);
+                console.log("User email:", user.email);
+                console.log("Is demo account:", isDemoAccount(user.email));
 
                 // Get the user's document from Firestore to check userType
                 const userDoc = await getDoc(doc(db, 'users', user.uid));
+                console.log("User doc exists:", userDoc.exists());
+
                 if (userDoc.exists()) {
                     const userData = userDoc.data();
+                    console.log("User data:", userData);
                     // Navigate based on userType
                     if (userData.userType === 'customer') {
                         navigate('/shops');
                     } else {
                         navigate('/create-shop');
+                    }
+                } else {
+                    console.log("No user document found for UID:", user.uid);
+                    // For demo accounts without docs, navigate based on email
+                    if (isDemoAccount(user.email)) {
+                        if (user.email.includes('owner')) {
+                            navigate('/create-shop');
+                        } else {
+                            navigate('/shops');
+                        }
                     }
                 }
             } else {
@@ -1485,6 +1504,10 @@ const Auth = () => {
 
     const handleAuth = async (e) => {
         e.preventDefault();
+        console.log("=== handleAuth called ===");
+        console.log("Email:", email);
+        console.log("Password:", password ? "****" : "EMPTY!");
+        console.log("isSignUp:", isSignUp);
         setError('');
         try {
             if (isSignUp) {
@@ -1508,12 +1531,14 @@ const Auth = () => {
 
                 console.log("User created and profile updated successfully");
             } else {
-                console.log("Attempting to sign in user");
-                await signInWithEmailAndPassword(auth, email, password);
-                console.log("User signed in successfully");
+                console.log("Attempting to sign in user with:", email);
+                const result = await signInWithEmailAndPassword(auth, email, password);
+                console.log("User signed in successfully:", result.user.uid);
             }
         } catch (error) {
-            console.error("Authentication error:", error);
+            console.error("=== Authentication error ===");
+            console.error("Error code:", error.code);
+            console.error("Error message:", error.message);
             setError(error.message);
         }
     };
@@ -1691,8 +1716,8 @@ const Auth = () => {
                 const user = userCredential.user;
 
                 try {
-                    // Send verification email
-                    await sendEmailVerification(user);
+                    // Email verification disabled - skip sending verification email
+                    // await sendEmailVerification(user);
 
                     // Handle profile image
                     let photoURL = '';
@@ -1719,7 +1744,7 @@ const Auth = () => {
                         userType: userType,
                         trialEndDate: trialEndDate,
                         isSubscribed: false,
-                        emailVerified: false,
+                        emailVerified: true, // Email verification disabled
                         createdAt: serverTimestamp(),
                         lastUpdated: serverTimestamp()
                     });
@@ -1743,16 +1768,19 @@ const Auth = () => {
             } else {
                 // Login flow with new alert system
                 try {
-                    // First check if user exists in Firestore
-                    const usersRef = collection(db, 'users');
-                    const q = query(usersRef, where('email', '==', email));
-                    const querySnapshot = await getDocs(q);
+                    // Demo accounts skip Firestore check (bypass permissions)
+                    if (!isDemoAccount(email)) {
+                        // First check if user exists in Firestore
+                        const usersRef = collection(db, 'users');
+                        const q = query(usersRef, where('email', '==', email));
+                        const querySnapshot = await getDocs(q);
 
-                    if (querySnapshot.empty) {
-                        setShowAlert(true);
-                        setAlertMessage(t.accountNotFound);
-                        setIsLoading(false);
-                        return;
+                        if (querySnapshot.empty) {
+                            setShowAlert(true);
+                            setAlertMessage(t.accountNotFound);
+                            setIsLoading(false);
+                            return;
+                        }
                     }
 
                     // Attempt login
@@ -1816,7 +1844,7 @@ const Auth = () => {
             emailAddress: "Email address",
             emailPlaceholder: "you@example.com",
             password: "Password",
-            passwordPlaceholder: "••••••••",
+            passwordPlaceholder: "тАвтАвтАвтАвтАвтАвтАвтАв",
             fullName: "Full Name",
             fullNamePlaceholder: "John Doe",
             profileImage: "Profile Image",
@@ -1844,56 +1872,56 @@ const Auth = () => {
         tr: {
             accountNotFound: "No account found with this email. Please check your email or sign up.",
             wrongPassword: "Incorrect password. Please try again.",
-            createAccount: "Hesabınızı oluşturun",
-            signIn: "Hesabınıza giriş yapın",
+            createAccount: "Hesab─▒n─▒z─▒ olu┼Яturun",
+            signIn: "Hesab─▒n─▒za giri┼Я yap─▒n",
             emailAddress: "E-posta adresi",
             emailPlaceholder: "siz@ornek.com",
-            password: "Şifre",
-            passwordPlaceholder: "••••••••",
+            password: "┼Юifre",
+            passwordPlaceholder: "тАвтАвтАвтАвтАвтАвтАвтАв",
             fullName: "Tam Ad",
-            fullNamePlaceholder: "Ahmet Yılmaz",
+            fullNamePlaceholder: "Ahmet Y─▒lmaz",
             profileImage: "Profil Resmi",
-            change: "Değiştir",
-            signUp: "Kayıt Ol",
-            signInButton: "Giriş Yap",
-            orContinueWith: "Veya şununla devam edin",
-            signInWithGoogle: "Google ile giriş yap",
-            alreadyHaveAccount: "Zaten bir hesabınız var mı?",
-            dontHaveAccount: "Hesabınız yok mu?"
+            change: "De─Яi┼Яtir",
+            signUp: "Kay─▒t Ol",
+            signInButton: "Giri┼Я Yap",
+            orContinueWith: "Veya ┼Яununla devam edin",
+            signInWithGoogle: "Google ile giri┼Я yap",
+            alreadyHaveAccount: "Zaten bir hesab─▒n─▒z var m─▒?",
+            dontHaveAccount: "Hesab─▒n─▒z yok mu?"
         },
         ar: {
-            accountNotFound: "لم يتم العثور على حساب بهذا البريد الإلكتروني. يرجى التحقق من بريدك الإلكتروني أو التسجيل.",
-            wrongPassword: "كلمة المرور غير صحيحة. حاول مرة اخرى.",
-            createAccount: "إنشاء حسابك",
-            signIn: "تسجيل الدخول إلى حسابك",
-            emailAddress: "عنوان البريد الإلكتروني",
-            emailPlaceholder: "أنت@مثال.com",
-            password: "كلمة المرور",
-            passwordPlaceholder: "••••••••",
-            fullName: "الاسم الكامل",
-            fullNamePlaceholder: "محمد علي",
-            profileImage: "صورة الملف الشخصي",
-            change: "تغيير",
-            signUp: "التسجيل",
-            signInButton: "تسجيل الدخول",
-            orContinueWith: "أو تابع باستخدام",
-            signInWithGoogle: "تسجيل الدخول باستخدام Google",
-            alreadyHaveAccount: "هل لديك حساب بالفعل؟",
-            dontHaveAccount: "ليس لديك حساب؟"
+            accountNotFound: "┘Д┘Е ┘К╪к┘Е ╪з┘Д╪╣╪л┘И╪▒ ╪╣┘Д┘Й ╪н╪│╪з╪и ╪и┘З╪░╪з ╪з┘Д╪и╪▒┘К╪п ╪з┘Д╪е┘Д┘Г╪к╪▒┘И┘Ж┘К. ┘К╪▒╪м┘Й ╪з┘Д╪к╪н┘В┘В ┘Е┘Ж ╪и╪▒┘К╪п┘Г ╪з┘Д╪е┘Д┘Г╪к╪▒┘И┘Ж┘К ╪г┘И ╪з┘Д╪к╪│╪м┘К┘Д.",
+            wrongPassword: "┘Г┘Д┘Е╪й ╪з┘Д┘Е╪▒┘И╪▒ ╪║┘К╪▒ ╪╡╪н┘К╪н╪й. ╪н╪з┘И┘Д ┘Е╪▒╪й ╪з╪о╪▒┘Й.",
+            createAccount: "╪е┘Ж╪┤╪з╪б ╪н╪│╪з╪и┘Г",
+            signIn: "╪к╪│╪м┘К┘Д ╪з┘Д╪п╪о┘И┘Д ╪е┘Д┘Й ╪н╪│╪з╪и┘Г",
+            emailAddress: "╪╣┘Ж┘И╪з┘Ж ╪з┘Д╪и╪▒┘К╪п ╪з┘Д╪е┘Д┘Г╪к╪▒┘И┘Ж┘К",
+            emailPlaceholder: "╪г┘Ж╪к@┘Е╪л╪з┘Д.com",
+            password: "┘Г┘Д┘Е╪й ╪з┘Д┘Е╪▒┘И╪▒",
+            passwordPlaceholder: "тАвтАвтАвтАвтАвтАвтАвтАв",
+            fullName: "╪з┘Д╪з╪│┘Е ╪з┘Д┘Г╪з┘Е┘Д",
+            fullNamePlaceholder: "┘Е╪н┘Е╪п ╪╣┘Д┘К",
+            profileImage: "╪╡┘И╪▒╪й ╪з┘Д┘Е┘Д┘Б ╪з┘Д╪┤╪о╪╡┘К",
+            change: "╪к╪║┘К┘К╪▒",
+            signUp: "╪з┘Д╪к╪│╪м┘К┘Д",
+            signInButton: "╪к╪│╪м┘К┘Д ╪з┘Д╪п╪о┘И┘Д",
+            orContinueWith: "╪г┘И ╪к╪з╪и╪╣ ╪и╪з╪│╪к╪о╪п╪з┘Е",
+            signInWithGoogle: "╪к╪│╪м┘К┘Д ╪з┘Д╪п╪о┘И┘Д ╪и╪з╪│╪к╪о╪п╪з┘Е Google",
+            alreadyHaveAccount: "┘З┘Д ┘Д╪п┘К┘Г ╪н╪│╪з╪и ╪и╪з┘Д┘Б╪╣┘Д╪Я",
+            dontHaveAccount: "┘Д┘К╪│ ┘Д╪п┘К┘Г ╪н╪│╪з╪и╪Я"
         },
         de: {
-            accountNotFound: "Kein Konto mit dieser E-Mail gefunden. Bitte überprüfen Sie Ihre E-Mail oder registrieren Sie sich.",
+            accountNotFound: "Kein Konto mit dieser E-Mail gefunden. Bitte ├╝berpr├╝fen Sie Ihre E-Mail oder registrieren Sie sich.",
             wrongPassword: "Falsches Passwort. Bitte versuche es erneut.",
             createAccount: "Erstellen Sie Ihr Konto",
             signIn: "Melden Sie sich bei Ihrem Konto an",
             emailAddress: "E-Mail-Adresse",
             emailPlaceholder: "sie@beispiel.de",
             password: "Passwort",
-            passwordPlaceholder: "••••••••",
-            fullName: "Vollständiger Name",
+            passwordPlaceholder: "тАвтАвтАвтАвтАвтАвтАвтАв",
+            fullName: "Vollst├дndiger Name",
             fullNamePlaceholder: "Max Mustermann",
             profileImage: "Profilbild",
-            change: "Ändern",
+            change: "├Дndern",
             signUp: "Registrieren",
             signInButton: "Anmelden",
             orContinueWith: "Oder fortfahren mit",
@@ -1917,14 +1945,8 @@ const Auth = () => {
                     email={userEmail}
                     userCredentials={userCredentials}
                     onResend={async () => {
-                        try {
-                            await resendVerificationEmail(userCredentials.email, userCredentials.password);
-                            setSuccess(t.emailSent);
-                            setTimeout(() => setSuccess(''), 3000);
-                        } catch (error) {
-                            console.error('Error resending verification:', error);
-                            setError(error.message || t.tooManyAttempts);
-                        }
+                        // Email verification disabled - no-op
+                        console.log('Email verification resend disabled');
                     }}
                     success={success}
                     error={error}

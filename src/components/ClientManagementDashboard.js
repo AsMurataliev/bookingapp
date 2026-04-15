@@ -1,17 +1,18 @@
-import React, {useEffect, useMemo, useState} from 'react';
+﻿import React, {useEffect, useMemo, useState} from 'react';
 import {collection, doc, getDocs, orderBy, query, updateDoc, where} from 'firebase/firestore';
 import {auth, db} from '../firebase';
-import {AlertCircle, ArrowDown, ArrowUp, CheckCircle, Eye, FileText, Scissors, Search, X, XCircle} from 'lucide-react';
+import {AlertCircle, ArrowDown, ArrowUp, CheckCircle, Eye, FileText, Scissors, Search, X, XCircle, UserX} from 'lucide-react';
 import {motion} from 'framer-motion';
 import EditAppointmentModal from './EditAppointmentModal';
-import {getAvailableTimeSlots, updateBooking} from '../utils/bookingFunctions';
+import {getAvailableTimeSlots} from '../Services/bookingService';
+import {updateBooking} from '../utils/bookingFunctions';
 import Swal from 'sweetalert2';
 import AnalyticsDashboard from "./AnalyticsDashboard";
 import {onAuthStateChanged} from "firebase/auth";
 import InvoiceDialog from "./InvoiceDialog";
 import FooterPages from "./FooterPages";
-
-// import * as dateMap from "date-fns";
+import ShopOwnerBookingModal from './ShopOwnerBookingModal';
+import {BOOKING_STATUS} from '../Services/bookingService';
 import './ScissorsLoader.css';
 import {createRoot} from 'react-dom/client';
 
@@ -28,6 +29,8 @@ export default function ClientManagementDashboard() {
     const [currentPage, setCurrentPage] = useState(1);
     const itemsPerPage = 10;
     const [showingInvoice, setShowingInvoice] = useState(null);
+    const [selectedBooking, setSelectedBooking] = useState(null);
+    const [showBookingModal, setShowBookingModal] = useState(false);
 
     useEffect(() => {
         console.log('Setting up auth listener');
@@ -289,14 +292,20 @@ export default function ClientManagementDashboard() {
     const handleAppointmentUpdate = async (updatedAppointment) => {
         try {
             await updateBooking(updatedAppointment.id, updatedAppointment);
-            // Update the appointments list
             setBookings(bookings.map(booking =>
-                booking.id === updatedAppointment.id ? updatedAppointment : booking
+                booking.id === updatedAppointment.id ? {...booking, ...updatedAppointment} : booking
             ));
             setEditingAppointment(null);
         } catch (error) {
             console.error('Error updating appointment:', error);
         }
+    };
+
+    const handleBookingUpdate = () => {
+        setShowBookingModal(false);
+        setSelectedBooking(null);
+        // Refresh bookings
+        setLoading(true);
     };
 
 
@@ -526,14 +535,14 @@ export default function ClientManagementDashboard() {
                                             {booking.selectedServices.map((service, index) => (
                                                 <div key={index} className="flex justify-between">
                                                     <span>{service.name}</span>
-                                                    <span>€{service.price}</span>
+                                                    <span>тВм{service.price}</span>
                                                 </div>
                                             ))}
                                             <div className="divider my-2"></div>
                                             <div className="flex justify-between font-bold">
                                                 <span>Total</span>
                                                 <span>
-                            €{booking.selectedServices.reduce((total, service) =>
+                            тВм{booking.selectedServices.reduce((total, service) =>
                                                     total + (parseFloat(service.price) || 0), 0).toFixed(2)}
                         </span>
                                             </div>
@@ -640,6 +649,7 @@ export default function ClientManagementDashboard() {
                                         <option value="confirmed">Confirmed</option>
                                         <option value="completed">Completed</option>
                                         <option value="cancelled">Cancelled</option>
+                                        <option value="no_show">No-Show</option>
                                     </select>
                                 </div>
                             </div>
@@ -709,7 +719,7 @@ export default function ClientManagementDashboard() {
                                         </td>
                                         <td>
                                             <div className="font-medium">
-                                                €{booking.selectedServices ?
+                                                тВм{booking.selectedServices ?
                                                 booking.selectedServices.reduce((total, service) =>
                                                     total + (parseFloat(service.price) || 0), 0).toFixed(2)
                                                 : '0.00'
@@ -719,12 +729,15 @@ export default function ClientManagementDashboard() {
                                         <td>
                                             <div className={`badge ${
                                                 booking.status === 'confirmed' ? 'badge-success' :
-                                                    booking.status === 'cancelled' ? 'badge-error' :
-                                                        'badge-warning'
+                                                booking.status === 'cancelled' ? 'badge-error' :
+                                                booking.status === 'no_show' ? 'badge-neutral' :
+                                                booking.status === 'completed' ? 'badge-info' :
+                                                'badge-warning'
                                             } gap-1`}>
                                                 {booking.status === 'confirmed' && <CheckCircle className="w-3 h-3"/>}
                                                 {booking.status === 'cancelled' && <XCircle className="w-3 h-3"/>}
                                                 {booking.status === 'pending' && <AlertCircle className="w-3 h-3"/>}
+                                                {booking.status === 'no_show' && <UserX className="w-3 h-3"/>}
                                                 {booking.status}
                                             </div>
                                         </td>
@@ -830,7 +843,7 @@ export default function ClientManagementDashboard() {
                                                     <div className="text-sm font-semibold text-base-content/60">Price
                                                     </div>
                                                     <div className="font-medium">
-                                                        €{booking.selectedServices ?
+                                                        тВм{booking.selectedServices ?
                                                         booking.selectedServices.reduce((total, service) =>
                                                             total + (parseFloat(service.price) || 0), 0).toFixed(2)
                                                         : '0.00'
@@ -907,7 +920,7 @@ export default function ClientManagementDashboard() {
                                     onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
                                     disabled={currentPage === 1}
                                 >
-                                    «
+                                    ┬л
                                 </button>
                                 {Array.from({length: totalPages}, (_, i) => i + 1).map(page => (
                                     <button
@@ -923,7 +936,7 @@ export default function ClientManagementDashboard() {
                                     onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
                                     disabled={currentPage === totalPages}
                                 >
-                                    »
+                                    ┬╗
                                 </button>
                             </div>
                         </div>
@@ -951,6 +964,17 @@ export default function ClientManagementDashboard() {
                     }}
                     booking={showingInvoice}
                     shopDetails={currentShop}
+                />
+
+                <ShopOwnerBookingModal
+                    booking={selectedBooking}
+                    isOpen={showBookingModal}
+                    onClose={() => {
+                        setShowBookingModal(false);
+                        setSelectedBooking(null);
+                    }}
+                    shop={currentShop}
+                    onUpdate={handleBookingUpdate}
                 />
             </div>
 

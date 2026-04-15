@@ -477,7 +477,7 @@ const CreateBarberShop = () => {
 
     const [slotDuration, setSlotDuration] = useState(30);
 
-    const MAPBOX_TOKEN = 'pk.eyJ1Ijoib3RobWFuYWRpYmVyc2hvcCIsImEiOiJjbHk5NTR1aWgwZW0yMm5xdzE2dmliZWZvIn0.XS8JZjdd1O8YIs_VXuUcPA';
+    const MAPBOX_TOKEN = process.env.REACT_APP_MAPBOX_TOKEN || '';
 
     const [hideUI, setHideUI] = useState(false);
     const [fadeOut, setFadeOut] = useState(false);
@@ -943,9 +943,9 @@ const CreateBarberShop = () => {
         const totalPricing = services.reduce((sum, service) =>
             sum + parseInt(service.price || 0, 10), 0);
 
-        if (totalPricing <= 100) return '€';
-        if (totalPricing <= 200) return '€€';
-        return '€€€';
+        if (totalPricing <= 100) return 'тВм';
+        if (totalPricing <= 200) return 'тВмтВм';
+        return 'тВмтВмтВм';
     };
 
     useEffect(() => {
@@ -1004,7 +1004,7 @@ const CreateBarberShop = () => {
         images: [],
         specialDates: {},
         categories: [],
-        pricingTier: '€',
+        pricingTier: 'тВм',
         paymentMethods: []
     });
 
@@ -1239,13 +1239,13 @@ const CreateBarberShop = () => {
                 if (!shopName.trim() || !address.trim() || !phoneNumber.trim() || !email.trim() || !editorContent.trim() || !categories.length) {
                     CustomSwal.fire({
                         title: 'Missing Information',
-                        text: language === 'tr' ? 'Lütfen tüm zorunlu alanları doldurun: Dükkan Adı, Adres, Telefon Numarası, E-posta ve Açıklama.' :
-                            language === 'ar' ? 'يرجى ملء جميع الحقول المطلوبة: اسم المتجر، العنوان، رقم الهاتف، البريد الإلكتروني والوصف.' :
-                                language === 'de' ? 'Bitte füllen Sie alle Pflichtfelder aus: Geschäftsname, Adresse, Telefonnummer, E-Mail und Beschreibung.' :
+                        text: language === 'tr' ? 'L├╝tfen t├╝m zorunlu alanlar─▒ doldurun: D├╝kkan Ad─▒, Adres, Telefon Numaras─▒, E-posta ve A├з─▒klama.' :
+                            language === 'ar' ? '┘К╪▒╪м┘Й ┘Е┘Д╪б ╪м┘Е┘К╪╣ ╪з┘Д╪н┘В┘И┘Д ╪з┘Д┘Е╪╖┘Д┘И╪и╪й: ╪з╪│┘Е ╪з┘Д┘Е╪к╪м╪▒╪М ╪з┘Д╪╣┘Ж┘И╪з┘Ж╪М ╪▒┘В┘Е ╪з┘Д┘З╪з╪к┘Б╪М ╪з┘Д╪и╪▒┘К╪п ╪з┘Д╪е┘Д┘Г╪к╪▒┘И┘Ж┘К ┘И╪з┘Д┘И╪╡┘Б.' :
+                                language === 'de' ? 'Bitte f├╝llen Sie alle Pflichtfelder aus: Gesch├дftsname, Adresse, Telefonnummer, E-Mail und Beschreibung.' :
                                     'Please fill in all required fields: Shop Name, Address, Phone Number, Email, and Description.',
                         icon: 'info',
                         confirmButtonText: language === 'tr' ? 'Tamam' :
-                            language === 'ar' ? 'حسناً' :
+                            language === 'ar' ? '╪н╪│┘Ж╪з┘Л' :
                                 language === 'de' ? 'OK' : 'OK'
                     });
 
@@ -1713,7 +1713,7 @@ const CreateBarberShop = () => {
             creating: "Creating...",
             success: "Success!",
             shopCreatedMessage: "Your barber shop has been created. To activate your shop, please subscribe to our service.",
-            subscribeNow: "Subscribe Now - €25/month",
+            subscribeNow: "Subscribe Now - тВм25/month",
             uniqueLinkMessage: "Your unique shop link will be generated after subscription.",
             createAnotherShop: "Create Another Shop",
             missingInformation: "Missing Information",
@@ -1739,149 +1739,149 @@ const CreateBarberShop = () => {
             creditCard: "Credit Card",
             mobilePayment: "Mobile Payment",
             other: "Other",
-            managedInSettings: "✨ Managed in account settings",
+            managedInSettings: "тЬи Managed in account settings",
             editInSettings: "Edit this in your account settings"
         },
         tr: {
-            enterBiography: "Berber dükkanınızı tanımlayın...",
-            biographyHelp: "Profesyonel bir düzen ile başlamak için şablon düğmesini kullanın",
-            viewCreatedShops: "Oluşturulan Dükkanları Görüntüle",
-            createYourBarberShop: "Berber Dükkanınızı Oluşturun",
-            trialExpired: "Deneme Süresi Sona Erdi",
-            trialExpiredMessage: "Deneme süreniz sona erdi. Hizmetlerimizi kullanmaya devam etmek için lütfen abone olun.",
-            trialActive: "Deneme Süresi Aktif",
-            trialActiveMessage: "Şu anda 14 günlük deneme sürecindesiniz.",
+            enterBiography: "Berber d├╝kkan─▒n─▒z─▒ tan─▒mlay─▒n...",
+            biographyHelp: "Profesyonel bir d├╝zen ile ba┼Яlamak i├зin ┼Яablon d├╝─Яmesini kullan─▒n",
+            viewCreatedShops: "Olu┼Яturulan D├╝kkanlar─▒ G├╢r├╝nt├╝le",
+            createYourBarberShop: "Berber D├╝kkan─▒n─▒z─▒ Olu┼Яturun",
+            trialExpired: "Deneme S├╝resi Sona Erdi",
+            trialExpiredMessage: "Deneme s├╝reniz sona erdi. Hizmetlerimizi kullanmaya devam etmek i├зin l├╝tfen abone olun.",
+            trialActive: "Deneme S├╝resi Aktif",
+            trialActiveMessage: "┼Юu anda 14 g├╝nl├╝k deneme s├╝recindesiniz.",
             salon: "Salon",
-            availability: "Müsaitlik",
-            images: "Görseller",
+            availability: "M├╝saitlik",
+            images: "G├╢rseller",
             services: "Hizmetler",
-            publish: "Yayınla",
-            barberShopName: "Berber Dükkanı Adı",
-            enterShopName: "Berber dükkanınızın adını girin",
+            publish: "Yay─▒nla",
+            barberShopName: "Berber D├╝kkan─▒ Ad─▒",
+            enterShopName: "Berber d├╝kkan─▒n─▒z─▒n ad─▒n─▒ girin",
             address: "Adres",
-            enterAddress: "Dükkanınızın adresini girin",
-            phoneNumber: "Telefon Numarası",
-            enterPhoneNumber: "Telefon numaranızı girin",
+            enterAddress: "D├╝kkan─▒n─▒z─▒n adresini girin",
+            phoneNumber: "Telefon Numaras─▒",
+            enterPhoneNumber: "Telefon numaran─▒z─▒ girin",
             email: "E-posta",
             enterEmail: "E-posta adresinizi girin",
             biography: "Biyografi",
-            next: "İleri",
+            next: "─░leri",
             back: "Geri",
-            setYourAvailability: "Müsaitlik Durumunuzu Ayarlayın",
-            dropzoneText: "Resimleri buraya sürükleyip bırakın veya dosya seçmek için tıklayın",
-            quickAddServices: "Hızlı Hizmet Ekle",
-            serviceName: "Hizmet adı",
+            setYourAvailability: "M├╝saitlik Durumunuzu Ayarlay─▒n",
+            dropzoneText: "Resimleri buraya s├╝r├╝kleyip b─▒rak─▒n veya dosya se├зmek i├зin t─▒klay─▒n",
+            quickAddServices: "H─▒zl─▒ Hizmet Ekle",
+            serviceName: "Hizmet ad─▒",
             price: "Fiyat",
             addService: "Hizmet Ekle",
-            creating: "Oluşturuluyor...",
-            success: "Başarılı!",
-            shopCreatedMessage: "Berber dükkanınız oluşturuldu. Dükkanınızı aktifleştirmek için lütfen hizmetimize abone olun.",
-            subscribeNow: "Şimdi Abone Ol - Aylık €25",
-            uniqueLinkMessage: "Benzersiz dükkan linkiniz abonelik sonrası oluşturulacaktır.",
-            createAnotherShop: "Başka Bir Dükkan Oluştur",
+            creating: "Olu┼Яturuluyor...",
+            success: "Ba┼Яar─▒l─▒!",
+            shopCreatedMessage: "Berber d├╝kkan─▒n─▒z olu┼Яturuldu. D├╝kkan─▒n─▒z─▒ aktifle┼Яtirmek i├зin l├╝tfen hizmetimize abone olun.",
+            subscribeNow: "┼Юimdi Abone Ol - Ayl─▒k тВм25",
+            uniqueLinkMessage: "Benzersiz d├╝kkan linkiniz abonelik sonras─▒ olu┼Яturulacakt─▒r.",
+            createAnotherShop: "Ba┼Яka Bir D├╝kkan Olu┼Яtur",
             missingInformation: "Eksik Bilgi",
-            fillAllFields: "Lütfen tüm gerekli alanları doldurun: Dükkan Adı, Adres, Telefon Numarası, E-posta ve Biyografi.",
-            storeHoursRequired: "Çalışma Saatleri Gerekli",
-            setStoreHours: "Lütfen haftanın en az bir günü için çalışma saatlerinizi ayarlayın.",
-            noImagesUploaded: "Resim Yüklenmedi",
-            addImagesAttractCustomers: "Dükkanınızın fotoğraflarını eklemek daha fazla müşteri çekebilir. Resimsiz devam etmek ister misiniz?",
+            fillAllFields: "L├╝tfen t├╝m gerekli alanlar─▒ doldurun: D├╝kkan Ad─▒, Adres, Telefon Numaras─▒, E-posta ve Biyografi.",
+            storeHoursRequired: "├Зal─▒┼Яma Saatleri Gerekli",
+            setStoreHours: "L├╝tfen haftan─▒n en az bir g├╝n├╝ i├зin ├зal─▒┼Яma saatlerinizi ayarlay─▒n.",
+            noImagesUploaded: "Resim Y├╝klenmedi",
+            addImagesAttractCustomers: "D├╝kkan─▒n─▒z─▒n foto─Яraflar─▒n─▒ eklemek daha fazla m├╝┼Яteri ├зekebilir. Resimsiz devam etmek ister misiniz?",
             continueWithoutImages: "Resimsiz devam et",
-            addImages: "Resim ekleyeceğim",
+            addImages: "Resim ekleyece─Яim",
             noServicesAdded: "Hizmet Eklenmedi",
-            addAtLeastOneService: "Lütfen en az bir hizmet ekleyin ve hem adını hem de fiyatını belirtin.",
-            shopCreatedSuccessfully: "Dükkan Başarıyla Oluşturuldu",
-            shopCreatedShareLink: "Dükkanınız oluşturuldu! Bu linki müşterilerinizle paylaşın:",
+            addAtLeastOneService: "L├╝tfen en az bir hizmet ekleyin ve hem ad─▒n─▒ hem de fiyat─▒n─▒ belirtin.",
+            shopCreatedSuccessfully: "D├╝kkan Ba┼Яar─▒yla Olu┼Яturuldu",
+            shopCreatedShareLink: "D├╝kkan─▒n─▒z olu┼Яturuldu! Bu linki m├╝┼Яterilerinizle payla┼Я─▒n:",
             error: "Hata",
-            creatingShop: "Dükkanınız oluşturuluyor...",
-            errorCreatingShop: "Berber dükkanınızı oluştururken bir hata oluştu. Lütfen tekrar deneyin.",
-            subscribeToCreate: "Berber dükkanı oluşturmak için lütfen abone olun.",
-            subscribeNowButton: "Şimdi Abone Ol",
-            paymentMethods: "Ödeme Yöntemleri",
-            selectPaymentMethods: "Dükkanınızın kabul ettiği ödeme yöntemlerini seçin",
+            creatingShop: "D├╝kkan─▒n─▒z olu┼Яturuluyor...",
+            errorCreatingShop: "Berber d├╝kkan─▒n─▒z─▒ olu┼Яtururken bir hata olu┼Яtu. L├╝tfen tekrar deneyin.",
+            subscribeToCreate: "Berber d├╝kkan─▒ olu┼Яturmak i├зin l├╝tfen abone olun.",
+            subscribeNowButton: "┼Юimdi Abone Ol",
+            paymentMethods: "├Цdeme Y├╢ntemleri",
+            selectPaymentMethods: "D├╝kkan─▒n─▒z─▒n kabul etti─Яi ├╢deme y├╢ntemlerini se├зin",
             cash: "Nakit",
-            creditCard: "Kredi Kartı",
-            mobilePayment: "Mobil Ödeme",
-            other: "Diğer",
-            managedInSettings: "✨ Hesap ayarlarında yönetilir",
-            editInSettings: "Bunu hesap ayarlarında düzenleyin"
+            creditCard: "Kredi Kart─▒",
+            mobilePayment: "Mobil ├Цdeme",
+            other: "Di─Яer",
+            managedInSettings: "тЬи Hesap ayarlar─▒nda y├╢netilir",
+            editInSettings: "Bunu hesap ayarlar─▒nda d├╝zenleyin"
         },
         ar: {
-            enterBiography: "صف صالون الحلاقة الخاص بك...",
-            biographyHelp: "استخدم زر القالب للبدء بتخطيط احترافي",
-            viewCreatedShops: "عرض المحلات المنشأة",
-            createYourBarberShop: "أنشئ صالون الحلاقة الخاص بك",
-            trialExpired: "انتهت الفترة التجريبية",
-            trialExpiredMessage: "انتهت فترتك التجريبية. يرجى الاشتراك للاستمرار في استخدام خدماتنا.",
-            trialActive: "الفترة التجريبية نشطة",
-            trialActiveMessage: "أنت حاليًا في فترتك التجريبية لمدة 14 يومًا.",
-            salon: "الصالون",
-            availability: "التوفر",
-            images: "الصور",
-            services: "الخدمات",
-            publish: "نشر",
-            barberShopName: "اسم صالون الحلاقة",
-            enterShopName: "أدخل اسم صالون الحلاقة الخاص بك",
-            address: "العنوان",
-            enterAddress: "أدخل عنوان صالونك",
-            phoneNumber: "رقم الهاتف",
-            enterPhoneNumber: "أدخل رقم هاتفك",
-            email: "البريد الإلكتروني",
-            enterEmail: "أدخل عنوان بريدك الإلكتروني",
-            biography: "السيرة الذاتية",
-            next: "التالي",
-            back: "السابق",
-            setYourAvailability: "حدد أوقات توفرك",
-            dropzoneText: "اسحب وأفلت بعض الصور هنا، أو انقر لتحديد الملفات",
-            quickAddServices: "إضافة خدمات سريعة",
-            serviceName: "اسم الخدمة",
-            price: "السعر",
-            addService: "إضافة خدمة",
-            creating: "جاري الإنشاء...",
-            success: "تم بنجاح!",
-            shopCreatedMessage: "تم إنشاء صالون الحلاقة الخاص بك. لتفعيل صالونك، يرجى الاشتراك في خدمتنا.",
-            subscribeNow: "اشترك الآن - €25/شهريًا",
-            uniqueLinkMessage: "سيتم إنشاء رابط صالونك الفريد بعد الاشتراك.",
-            createAnotherShop: "إنشاء صالون آخر",
-            missingInformation: "معلومات ناقصة",
-            fillAllFields: "يرجى ملء جميع الحقول المطلوبة: اسم الصالون، العنوان، رقم الهاتف، البريد الإلكتروني، والسيرة الذاتية.",
-            storeHoursRequired: "ساعات العمل مطلوبة",
-            setStoreHours: "يرجى تحديد ساعات عملك ليوم واحد على الأقل من أيام الأسبوع.",
-            noImagesUploaded: "لم يتم تحميل صور",
-            addImagesAttractCustomers: "إضافة صور لصالونك يمكن أن يجذب المزيد من العملاء. هل ترغب في المتابعة بدون صور؟",
-            continueWithoutImages: "المتابعة بدون صور",
-            addImages: "سأضيف صورًا",
-            noServicesAdded: "لم تتم إضافة خدمات",
-            addAtLeastOneService: "يرجى إضافة خدمة واحدة على الأقل مع ذكر الاسم والسعر.",
-            shopCreatedSuccessfully: "تم إنشاء الصالون بنجاح",
-            shopCreatedShareLink: "تم إنشاء صالونك! شارك هذا الرابط مع عملائك:",
-            error: "خطأ",
-            creatingShop: "جاري إنشاء متجرك...",
-            errorCreatingShop: "حدث خطأ أثناء إنشاء صالون الحلاقة الخاص بك. يرجى المحاولة مرة أخرى.",
-            subscribeToCreate: "يرجى الاشتراك لإنشاء صالون حلاقة.",
-            subscribeNowButton: "اشترك الآن",
-            paymentMethods: "طرق الدفع",
-            selectPaymentMethods: "حدد طرق الدفع التي يقبلها متجرك",
-            cash: "نقداً",
-            creditCard: "بطاقة ائتمان",
-            mobilePayment: "دفع عبر الهاتف",
-            other: "أخرى",
-            managedInSettings: "✨ تتم إدارته في إعدادات الحساب",
-            editInSettings: "قم بتحرير هذا في إعدادات حسابك"
+            enterBiography: "╪╡┘Б ╪╡╪з┘Д┘И┘Ж ╪з┘Д╪н┘Д╪з┘В╪й ╪з┘Д╪о╪з╪╡ ╪и┘Г...",
+            biographyHelp: "╪з╪│╪к╪о╪п┘Е ╪▓╪▒ ╪з┘Д┘В╪з┘Д╪и ┘Д┘Д╪и╪п╪б ╪и╪к╪о╪╖┘К╪╖ ╪з╪н╪к╪▒╪з┘Б┘К",
+            viewCreatedShops: "╪╣╪▒╪╢ ╪з┘Д┘Е╪н┘Д╪з╪к ╪з┘Д┘Е┘Ж╪┤╪г╪й",
+            createYourBarberShop: "╪г┘Ж╪┤╪ж ╪╡╪з┘Д┘И┘Ж ╪з┘Д╪н┘Д╪з┘В╪й ╪з┘Д╪о╪з╪╡ ╪и┘Г",
+            trialExpired: "╪з┘Ж╪к┘З╪к ╪з┘Д┘Б╪к╪▒╪й ╪з┘Д╪к╪м╪▒┘К╪и┘К╪й",
+            trialExpiredMessage: "╪з┘Ж╪к┘З╪к ┘Б╪к╪▒╪к┘Г ╪з┘Д╪к╪м╪▒┘К╪и┘К╪й. ┘К╪▒╪м┘Й ╪з┘Д╪з╪┤╪к╪▒╪з┘Г ┘Д┘Д╪з╪│╪к┘Е╪▒╪з╪▒ ┘Б┘К ╪з╪│╪к╪о╪п╪з┘Е ╪о╪п┘Е╪з╪к┘Ж╪з.",
+            trialActive: "╪з┘Д┘Б╪к╪▒╪й ╪з┘Д╪к╪м╪▒┘К╪и┘К╪й ┘Ж╪┤╪╖╪й",
+            trialActiveMessage: "╪г┘Ж╪к ╪н╪з┘Д┘К┘Л╪з ┘Б┘К ┘Б╪к╪▒╪к┘Г ╪з┘Д╪к╪м╪▒┘К╪и┘К╪й ┘Д┘Е╪п╪й 14 ┘К┘И┘Е┘Л╪з.",
+            salon: "╪з┘Д╪╡╪з┘Д┘И┘Ж",
+            availability: "╪з┘Д╪к┘И┘Б╪▒",
+            images: "╪з┘Д╪╡┘И╪▒",
+            services: "╪з┘Д╪о╪п┘Е╪з╪к",
+            publish: "┘Ж╪┤╪▒",
+            barberShopName: "╪з╪│┘Е ╪╡╪з┘Д┘И┘Ж ╪з┘Д╪н┘Д╪з┘В╪й",
+            enterShopName: "╪г╪п╪о┘Д ╪з╪│┘Е ╪╡╪з┘Д┘И┘Ж ╪з┘Д╪н┘Д╪з┘В╪й ╪з┘Д╪о╪з╪╡ ╪и┘Г",
+            address: "╪з┘Д╪╣┘Ж┘И╪з┘Ж",
+            enterAddress: "╪г╪п╪о┘Д ╪╣┘Ж┘И╪з┘Ж ╪╡╪з┘Д┘И┘Ж┘Г",
+            phoneNumber: "╪▒┘В┘Е ╪з┘Д┘З╪з╪к┘Б",
+            enterPhoneNumber: "╪г╪п╪о┘Д ╪▒┘В┘Е ┘З╪з╪к┘Б┘Г",
+            email: "╪з┘Д╪и╪▒┘К╪п ╪з┘Д╪е┘Д┘Г╪к╪▒┘И┘Ж┘К",
+            enterEmail: "╪г╪п╪о┘Д ╪╣┘Ж┘И╪з┘Ж ╪и╪▒┘К╪п┘Г ╪з┘Д╪е┘Д┘Г╪к╪▒┘И┘Ж┘К",
+            biography: "╪з┘Д╪│┘К╪▒╪й ╪з┘Д╪░╪з╪к┘К╪й",
+            next: "╪з┘Д╪к╪з┘Д┘К",
+            back: "╪з┘Д╪│╪з╪и┘В",
+            setYourAvailability: "╪н╪п╪п ╪г┘И┘В╪з╪к ╪к┘И┘Б╪▒┘Г",
+            dropzoneText: "╪з╪│╪н╪и ┘И╪г┘Б┘Д╪к ╪и╪╣╪╢ ╪з┘Д╪╡┘И╪▒ ┘З┘Ж╪з╪М ╪г┘И ╪з┘Ж┘В╪▒ ┘Д╪к╪н╪п┘К╪п ╪з┘Д┘Е┘Д┘Б╪з╪к",
+            quickAddServices: "╪е╪╢╪з┘Б╪й ╪о╪п┘Е╪з╪к ╪│╪▒┘К╪╣╪й",
+            serviceName: "╪з╪│┘Е ╪з┘Д╪о╪п┘Е╪й",
+            price: "╪з┘Д╪│╪╣╪▒",
+            addService: "╪е╪╢╪з┘Б╪й ╪о╪п┘Е╪й",
+            creating: "╪м╪з╪▒┘К ╪з┘Д╪е┘Ж╪┤╪з╪б...",
+            success: "╪к┘Е ╪и┘Ж╪м╪з╪н!",
+            shopCreatedMessage: "╪к┘Е ╪е┘Ж╪┤╪з╪б ╪╡╪з┘Д┘И┘Ж ╪з┘Д╪н┘Д╪з┘В╪й ╪з┘Д╪о╪з╪╡ ╪и┘Г. ┘Д╪к┘Б╪╣┘К┘Д ╪╡╪з┘Д┘И┘Ж┘Г╪М ┘К╪▒╪м┘Й ╪з┘Д╪з╪┤╪к╪▒╪з┘Г ┘Б┘К ╪о╪п┘Е╪к┘Ж╪з.",
+            subscribeNow: "╪з╪┤╪к╪▒┘Г ╪з┘Д╪в┘Ж - тВм25/╪┤┘З╪▒┘К┘Л╪з",
+            uniqueLinkMessage: "╪│┘К╪к┘Е ╪е┘Ж╪┤╪з╪б ╪▒╪з╪и╪╖ ╪╡╪з┘Д┘И┘Ж┘Г ╪з┘Д┘Б╪▒┘К╪п ╪и╪╣╪п ╪з┘Д╪з╪┤╪к╪▒╪з┘Г.",
+            createAnotherShop: "╪е┘Ж╪┤╪з╪б ╪╡╪з┘Д┘И┘Ж ╪в╪о╪▒",
+            missingInformation: "┘Е╪╣┘Д┘И┘Е╪з╪к ┘Ж╪з┘В╪╡╪й",
+            fillAllFields: "┘К╪▒╪м┘Й ┘Е┘Д╪б ╪м┘Е┘К╪╣ ╪з┘Д╪н┘В┘И┘Д ╪з┘Д┘Е╪╖┘Д┘И╪и╪й: ╪з╪│┘Е ╪з┘Д╪╡╪з┘Д┘И┘Ж╪М ╪з┘Д╪╣┘Ж┘И╪з┘Ж╪М ╪▒┘В┘Е ╪з┘Д┘З╪з╪к┘Б╪М ╪з┘Д╪и╪▒┘К╪п ╪з┘Д╪е┘Д┘Г╪к╪▒┘И┘Ж┘К╪М ┘И╪з┘Д╪│┘К╪▒╪й ╪з┘Д╪░╪з╪к┘К╪й.",
+            storeHoursRequired: "╪│╪з╪╣╪з╪к ╪з┘Д╪╣┘Е┘Д ┘Е╪╖┘Д┘И╪и╪й",
+            setStoreHours: "┘К╪▒╪м┘Й ╪к╪н╪п┘К╪п ╪│╪з╪╣╪з╪к ╪╣┘Е┘Д┘Г ┘Д┘К┘И┘Е ┘И╪з╪н╪п ╪╣┘Д┘Й ╪з┘Д╪г┘В┘Д ┘Е┘Ж ╪г┘К╪з┘Е ╪з┘Д╪г╪│╪и┘И╪╣.",
+            noImagesUploaded: "┘Д┘Е ┘К╪к┘Е ╪к╪н┘Е┘К┘Д ╪╡┘И╪▒",
+            addImagesAttractCustomers: "╪е╪╢╪з┘Б╪й ╪╡┘И╪▒ ┘Д╪╡╪з┘Д┘И┘Ж┘Г ┘К┘Е┘Г┘Ж ╪г┘Ж ┘К╪м╪░╪и ╪з┘Д┘Е╪▓┘К╪п ┘Е┘Ж ╪з┘Д╪╣┘Е┘Д╪з╪б. ┘З┘Д ╪к╪▒╪║╪и ┘Б┘К ╪з┘Д┘Е╪к╪з╪и╪╣╪й ╪и╪п┘И┘Ж ╪╡┘И╪▒╪Я",
+            continueWithoutImages: "╪з┘Д┘Е╪к╪з╪и╪╣╪й ╪и╪п┘И┘Ж ╪╡┘И╪▒",
+            addImages: "╪│╪г╪╢┘К┘Б ╪╡┘И╪▒┘Л╪з",
+            noServicesAdded: "┘Д┘Е ╪к╪к┘Е ╪е╪╢╪з┘Б╪й ╪о╪п┘Е╪з╪к",
+            addAtLeastOneService: "┘К╪▒╪м┘Й ╪е╪╢╪з┘Б╪й ╪о╪п┘Е╪й ┘И╪з╪н╪п╪й ╪╣┘Д┘Й ╪з┘Д╪г┘В┘Д ┘Е╪╣ ╪░┘Г╪▒ ╪з┘Д╪з╪│┘Е ┘И╪з┘Д╪│╪╣╪▒.",
+            shopCreatedSuccessfully: "╪к┘Е ╪е┘Ж╪┤╪з╪б ╪з┘Д╪╡╪з┘Д┘И┘Ж ╪и┘Ж╪м╪з╪н",
+            shopCreatedShareLink: "╪к┘Е ╪е┘Ж╪┤╪з╪б ╪╡╪з┘Д┘И┘Ж┘Г! ╪┤╪з╪▒┘Г ┘З╪░╪з ╪з┘Д╪▒╪з╪и╪╖ ┘Е╪╣ ╪╣┘Е┘Д╪з╪ж┘Г:",
+            error: "╪о╪╖╪г",
+            creatingShop: "╪м╪з╪▒┘К ╪е┘Ж╪┤╪з╪б ┘Е╪к╪м╪▒┘Г...",
+            errorCreatingShop: "╪н╪п╪л ╪о╪╖╪г ╪г╪л┘Ж╪з╪б ╪е┘Ж╪┤╪з╪б ╪╡╪з┘Д┘И┘Ж ╪з┘Д╪н┘Д╪з┘В╪й ╪з┘Д╪о╪з╪╡ ╪и┘Г. ┘К╪▒╪м┘Й ╪з┘Д┘Е╪н╪з┘И┘Д╪й ┘Е╪▒╪й ╪г╪о╪▒┘Й.",
+            subscribeToCreate: "┘К╪▒╪м┘Й ╪з┘Д╪з╪┤╪к╪▒╪з┘Г ┘Д╪е┘Ж╪┤╪з╪б ╪╡╪з┘Д┘И┘Ж ╪н┘Д╪з┘В╪й.",
+            subscribeNowButton: "╪з╪┤╪к╪▒┘Г ╪з┘Д╪в┘Ж",
+            paymentMethods: "╪╖╪▒┘В ╪з┘Д╪п┘Б╪╣",
+            selectPaymentMethods: "╪н╪п╪п ╪╖╪▒┘В ╪з┘Д╪п┘Б╪╣ ╪з┘Д╪к┘К ┘К┘В╪и┘Д┘З╪з ┘Е╪к╪м╪▒┘Г",
+            cash: "┘Ж┘В╪п╪з┘Л",
+            creditCard: "╪и╪╖╪з┘В╪й ╪з╪ж╪к┘Е╪з┘Ж",
+            mobilePayment: "╪п┘Б╪╣ ╪╣╪и╪▒ ╪з┘Д┘З╪з╪к┘Б",
+            other: "╪г╪о╪▒┘Й",
+            managedInSettings: "тЬи ╪к╪к┘Е ╪е╪п╪з╪▒╪к┘З ┘Б┘К ╪е╪╣╪п╪з╪п╪з╪к ╪з┘Д╪н╪│╪з╪и",
+            editInSettings: "┘В┘Е ╪и╪к╪н╪▒┘К╪▒ ┘З╪░╪з ┘Б┘К ╪е╪╣╪п╪з╪п╪з╪к ╪н╪│╪з╪и┘Г"
         },
         de: {
             enterBiography: "Beschreiben Sie Ihren Friseursalon...",
-            biographyHelp: "Verwenden Sie die Vorlagenschaltfläche, um mit einem professionellen Layout zu beginnen",
-            viewCreatedShops: "Erstellte Läden anzeigen",
+            biographyHelp: "Verwenden Sie die Vorlagenschaltfl├дche, um mit einem professionellen Layout zu beginnen",
+            viewCreatedShops: "Erstellte L├дden anzeigen",
             createYourBarberShop: "Erstellen Sie Ihren Friseursalon",
             trialExpired: "Testphase abgelaufen",
             trialExpiredMessage: "Ihre Testphase ist abgelaufen. Bitte abonnieren Sie, um unsere Dienste weiterhin zu nutzen.",
             trialActive: "Testphase aktiv",
-            trialActiveMessage: "Sie befinden sich derzeit in Ihrer 14-tägigen Testphase.",
+            trialActiveMessage: "Sie befinden sich derzeit in Ihrer 14-t├дgigen Testphase.",
             salon: "Salon",
-            availability: "Verfügbarkeit",
+            availability: "Verf├╝gbarkeit",
             images: "Bilder",
             services: "Dienstleistungen",
-            publish: "Veröffentlichen",
+            publish: "Ver├╢ffentlichen",
             barberShopName: "Name des Friseursalons",
             enterShopName: "Geben Sie den Namen Ihres Friseursalons ein",
             address: "Adresse",
@@ -1892,29 +1892,29 @@ const CreateBarberShop = () => {
             enterEmail: "Geben Sie Ihre E-Mail-Adresse ein",
             biography: "Biografie",
             next: "Weiter",
-            back: "Zurück",
-            setYourAvailability: "Legen Sie Ihre Verfügbarkeit fest",
-            dropzoneText: "Ziehen Sie einige Bilder hierher oder klicken Sie, um Dateien auszuwählen",
-            quickAddServices: "Schnelle Dienstleistungen hinzufügen",
+            back: "Zur├╝ck",
+            setYourAvailability: "Legen Sie Ihre Verf├╝gbarkeit fest",
+            dropzoneText: "Ziehen Sie einige Bilder hierher oder klicken Sie, um Dateien auszuw├дhlen",
+            quickAddServices: "Schnelle Dienstleistungen hinzuf├╝gen",
             serviceName: "Name der Dienstleistung",
             price: "Preis",
-            addService: "Dienstleistung hinzufügen",
+            addService: "Dienstleistung hinzuf├╝gen",
             creating: "Wird erstellt...",
             success: "Erfolg!",
             shopCreatedMessage: "Ihr Friseursalon wurde erstellt. Um Ihren Salon zu aktivieren, abonnieren Sie bitte unseren Service.",
-            subscribeNow: "Jetzt abonnieren - €25/Monat",
+            subscribeNow: "Jetzt abonnieren - тВм25/Monat",
             uniqueLinkMessage: "Ihr einzigartiger Salon-Link wird nach dem Abonnement generiert.",
             createAnotherShop: "Einen weiteren Salon erstellen",
             missingInformation: "Fehlende Informationen",
-            fillAllFields: "Bitte füllen Sie alle erforderlichen Felder aus: Salonname, Adresse, Telefonnummer, E-Mail und Biografie.",
-            storeHoursRequired: "Öffnungszeiten erforderlich",
-            setStoreHours: "Bitte legen Sie Ihre Öffnungszeiten für mindestens einen Tag der Woche fest.",
+            fillAllFields: "Bitte f├╝llen Sie alle erforderlichen Felder aus: Salonname, Adresse, Telefonnummer, E-Mail und Biografie.",
+            storeHoursRequired: "├Цffnungszeiten erforderlich",
+            setStoreHours: "Bitte legen Sie Ihre ├Цffnungszeiten f├╝r mindestens einen Tag der Woche fest.",
             noImagesUploaded: "Keine Bilder hochgeladen",
-            addImagesAttractCustomers: "Das Hinzufügen von Fotos Ihres Salons kann mehr Kunden anziehen. Möchten Sie ohne Bilder fortfahren?",
+            addImagesAttractCustomers: "Das Hinzuf├╝gen von Fotos Ihres Salons kann mehr Kunden anziehen. M├╢chten Sie ohne Bilder fortfahren?",
             continueWithoutImages: "Ohne Bilder fortfahren",
-            addImages: "Ich werde Bilder hinzufügen",
-            noServicesAdded: "Keine Dienstleistungen hinzugefügt",
-            addAtLeastOneService: "Bitte fügen Sie mindestens eine Dienstleistung mit Namen und Preis hinzu.",
+            addImages: "Ich werde Bilder hinzuf├╝gen",
+            noServicesAdded: "Keine Dienstleistungen hinzugef├╝gt",
+            addAtLeastOneService: "Bitte f├╝gen Sie mindestens eine Dienstleistung mit Namen und Preis hinzu.",
             shopCreatedSuccessfully: "Salon erfolgreich erstellt",
             shopCreatedShareLink: "Ihr Salon wurde erstellt! Teilen Sie diesen Link mit Ihren Kunden:",
             error: "Fehler",
@@ -1923,12 +1923,12 @@ const CreateBarberShop = () => {
             subscribeToCreate: "Bitte abonnieren Sie, um einen Friseursalon zu erstellen.",
             subscribeNowButton: "Jetzt abonnieren",
             paymentMethods: "Zahlungsmethoden",
-            selectPaymentMethods: "Wählen Sie die Zahlungsmethoden aus, die Ihr Geschäft akzeptiert",
+            selectPaymentMethods: "W├дhlen Sie die Zahlungsmethoden aus, die Ihr Gesch├дft akzeptiert",
             cash: "Bargeld",
             creditCard: "Kreditkarte",
             mobilePayment: "Mobile Zahlung",
             other: "Andere",
-            managedInSettings: "✨ Wird in den Kontoeinstellungen verwaltet",
+            managedInSettings: "тЬи Wird in den Kontoeinstellungen verwaltet",
             editInSettings: "Bearbeiten Sie dies in Ihren Kontoeinstellungen"
         }
     };
@@ -2186,7 +2186,7 @@ const CreateBarberShop = () => {
                         <span className="flex items-center gap-2">
                             <Store className="w-4 h-4"/>
                             {language === 'tr' ? 'Bu adresi kullan' :
-                                language === 'ar' ? 'استخدم هذا العنوان' :
+                                language === 'ar' ? '╪з╪│╪к╪о╪п┘Е ┘З╪░╪з ╪з┘Д╪╣┘Ж┘И╪з┘Ж' :
                                     language === 'de' ? 'Diese Adresse verwenden' :
                                         'Use this address'}: "{address}"
                         </span>
@@ -2202,9 +2202,9 @@ const CreateBarberShop = () => {
                                 {!isSuggestionSelected && address.length > 3 && (
                                     <div className="mt-1 text-sm text-base-content/70 flex items-center gap-1">
                                         <Info className="w-4 h-4"/>
-                                        {language === 'tr' ? 'Adresinizi seçin veya özel adres girin' :
-                                            language === 'ar' ? 'اختر عنوانك أو أدخل عنوانًا مخصصًا' :
-                                                language === 'de' ? 'Wählen Sie Ihre Adresse aus oder geben Sie eine benutzerdefinierte Adresse ein' :
+                                        {language === 'tr' ? 'Adresinizi se├зin veya ├╢zel adres girin' :
+                                            language === 'ar' ? '╪з╪о╪к╪▒ ╪╣┘Ж┘И╪з┘Ж┘Г ╪г┘И ╪г╪п╪о┘Д ╪╣┘Ж┘И╪з┘Ж┘Л╪з ┘Е╪о╪╡╪╡┘Л╪з' :
+                                                language === 'de' ? 'W├дhlen Sie Ihre Adresse aus oder geben Sie eine benutzerdefinierte Adresse ein' :
                                                     'Select your address or enter a custom one'}
                                     </div>
                                 )}
@@ -2213,8 +2213,8 @@ const CreateBarberShop = () => {
                                     <div
                                         className="absolute z-[2001] w-full bg-base-100 border border-base-300 mt-1 rounded-lg shadow-xl p-4 flex items-center justify-center">
                                         <span className="loading loading-spinner loading-sm mr-2"></span>
-                                        {language === 'tr' ? 'Adresler yükleniyor...' :
-                                            language === 'ar' ? 'جارٍ تحميل العناوين...' :
+                                        {language === 'tr' ? 'Adresler y├╝kleniyor...' :
+                                            language === 'ar' ? '╪м╪з╪▒┘Н ╪к╪н┘Е┘К┘Д ╪з┘Д╪╣┘Ж╪з┘И┘К┘Ж...' :
                                                 language === 'de' ? 'Adressen werden geladen...' :
                                                     'Loading addresses...'}
                                     </div>
@@ -2412,7 +2412,7 @@ const CreateBarberShop = () => {
                                 {/*                className="absolute top-1 right-1 bg-white bg-opacity-70 text-gray-700 rounded-full w-6 h-6 flex items-center justify-center shadow-md hover:bg-opacity-100 transition-colors"*/}
                                 {/*                aria-label={t.removeImage}*/}
                                 {/*            >*/}
-                                {/*                <span className="text-xl font-bold">×</span>*/}
+                                {/*                <span className="text-xl font-bold">├Ч</span>*/}
                                 {/*            </button>*/}
                                 {/*        </div>*/}
                                 {/*    ))}*/}
